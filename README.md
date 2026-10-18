@@ -71,18 +71,20 @@ No DP-version switch, replug, reboot, WindowServer restart, or “Detect Display
 
 **Evidence limits:** CoreGraphics online state is not physical bright-screen confirmation. HiDPI render dimensions are not wire timing. This run did not independently re-accept both OSD input timings as 3840×2160 at 120 Hz. Repeated reconnects, sleep/wake, closed-lid recovery, and reverse-order recovery remain unverified.
 
-## 5. Strict supported scope
+## 5. Identification and supported scope
 
-The current recovery implementation deliberately fails closed:
+No monitor identity is compiled in. At run time the tool enumerates the external displays that are actually attached (CoreGraphics online list, the IOAV service list and the crossbar connection mapping), names each row from the display's own EDID descriptor 0xFC — falling back to the CoreGraphics name and then to `vendor:model`, and saying so plainly when a name cannot be read — and shows the online state and reported rate for one, two or more externals.
 
-- Only the allowlisted P275/QSN-CAB identities and the previously verified P275 EDID fingerprint/candidate are accepted.
-- Supported fault: **P275 online and occupying two Pipes; Huawei missing and without an allocated Pipe; internal display online.**
-- Huawei-first reverse-order faults are diagnosed but not automatically repaired.
-- Unknown or duplicate identities, unsupported EDID capabilities, missing EDID, changed service ID/path, and uncertain readback stop the operation.
+Recovery is equally identity-free and symmetric:
+
+- The target is the **online external display that currently occupies two Pipes**, while another external port or service has no link/no Pipe, and the internal display is online (or the explicit no-internal-fallback opt-in is selected).
+- The candidate is generated from **that display's own freshly read EDID** through the unchanged fail-closed audit, and the run records its own original/candidate digests in its own manifest; every later step verifies against that manifest, never against a global constant.
+- Both cable orders are supported. The order is only a label ("verified on this machine" / "unverified order"); it never blocks a write and never weakens a gate.
+- Unknown or duplicate identities, unsupported EDID capabilities, missing EDID, changed service ID/path, an unreadable target, and uncertain readback stop the operation — and a refusal names the exact failing field instead of claiming support.
 - Backups are per-run and never silently overwritten. Reconnecting changes service identities; an old backup must not be retargeted by monitor name.
 - An already-online pair is a no-write no-op, including a healthy closed-lid session. This does **not** validate recovery while closed-lid.
 
-Changing a fingerprint or widening an allowlist is not a safe way to add monitor support. New hardware needs a separate audit and controlled apply/reset validation.
+The countdown is the primary safety net: if no stable dual-screen evidence arrives within the bounded wait, the runner automatically performs the verified mode-0 revert of that same run and reports whether it succeeded. It refuses to revert what it cannot verify (changed identity, missing service, uncertain readback) and keeps a pending record for manual handling; a display that disappears from the registry entirely can still need manual handling. Adding support for other displays needs the same audit and controlled apply/reset validation, not a widened allowlist.
 
 ## 6. Safety and transaction lifecycle
 
@@ -90,7 +92,11 @@ The native IOAV helper uses **private Apple interfaces**. They can change or fai
 
 The workflow rechecks the supported fault before applying; then polls for two approximately 120 Hz online displays, each assigned a distinct single Pipe. Before automatic reset, it rechecks stable evidence and exact service identity. Reset must restore the original bytes, and post-reset online state is checked separately.
 
-A pending transaction is persisted before dispatching a write. On a timeout, identity change, or uncertain result, the app retains that record and exposes **Undo This Override** rather than blindly writing to another service. The low-level helper is an internal implementation detail; use the guarded app, not direct helper invocations. Do not run the old experimental CLI concurrently.
+A pending transaction is persisted before dispatching a write. A timeout no longer waits for a click: the countdown performs the verified automatic revert. Only an unverifiable revert (identity change, missing service, uncertain readback) retains the record and exposes **Undo This Override** instead of writing blindly to another service. The low-level helper is an internal implementation detail; use the guarded app, not direct helper invocations. Do not run the old experimental CLI concurrently.
+
+## 5b. Runtime dependency and release caveats
+
+Python is **not** bundled. `Contents/Resources/python-path.txt` records the build machine's interpreter as a hint only; at run time the app resolves an interpreter in this order — `DISPLAYPIPE_PYTHON` (explicit; an unusable value is an error, not a fallback), the recorded path, `/usr/bin/python3`, `/usr/local/bin/python3`, `/opt/homebrew/bin/python3`, `/Library/Frameworks/Python.framework/Versions/*/bin/python3`, and `DISPLAYPIPE_PYTHON_CANDIDATES` (colon separated, replaces the standard fallbacks). Every candidate must be executable and report Python 3.9+. Nothing is installed, downloaded or written to the system; when nothing qualifies the app stops with an actionable message naming the tried paths and stating that no display write happened. The bundle is ad-hoc signed only: there is no Developer ID and no notarization, so Gatekeeper may require opening it manually (right-click → Open, or System Settings → Privacy & Security → Open Anyway).
 
 Runtime backups and reports live in:
 
@@ -159,7 +165,7 @@ The RSS readings used the same `ps rss` method at 15/16/17 seconds after separat
 
 Upstream: [pipecap](https://github.com/a1678991/pipecap), pinned source `d045192de888188783b4da74b10ab05f4229c868`. Third-party MIT notices are retained in their source directories and packaged resources. This repository does not contain BetterDisplay's implementation or bypass its licensing.
 
-**License:** DisplayPipe's original code is released under the **MIT License** — see [`LICENSE`](LICENSE), Copyright (c) 2026 TimmySheep. Vendored upstream components (pipecap, `backend/edid-core`) keep their own included MIT notices, retained both in the source tree and in packaged builds. Third-party trademarks and Apple private interfaces are not licensed by this project.
+**License status:** public source availability is not a blanket license grant. No project-wide license has yet been selected for the original DisplayPipe code; rights remain reserved for that code. The separately identified upstream MIT components remain under their included licenses.
 
 This public repository starts from a reviewed source snapshot. Private development history, personal workspace instructions, raw local EDID captures, transaction backups, and machine-specific audit logs are intentionally not published.
 
@@ -216,17 +222,17 @@ DisplayPipe 是一个轻量的原生 macOS 工具，用于调查并针对特定�
 
 目标体验：接回两条线 → 开 App 看状态 → 点击“恢复双屏”并确认一次 → 自动备份、临时限制、等待双屏稳定、撤销并核验。
 
-原生 AppKit 首页只展示状态、两台屏的在线／刷新率和一个主按钮。详细诊断默认折叠、按需创建并释放；有未结束覆盖时才突出撤销入口。无浏览器外壳、启动 Agent、常驻恢复轮询、网络服务或额外 Python 包。
+原生 AppKit 首页按**运行时枚举到的外接显示器数量**逐行显示真实名称（EDID 0xFC → CoreGraphics 名称 → vendor:model，读不到就照实写）、在线状态与刷新率，加一行内屏状态和台数、一个主按钮。详细诊断默认折叠、按需创建并释放；有未结束覆盖时才突出撤销入口。无浏览器外壳、启动 Agent、常驻恢复轮询、网络服务或额外 Python 包。
 
-当前只允许：**P275 在线占两个 Pipe、华为缺失且没有 Pipe、内屏在线**，并且身份及 P275 原始 EDID／候选指纹与已验收组合一致。未知／重复设备、EDID 缺失、未知能力、服务 ID／路径变化、读回不确定都会停止。华为先接的反向故障暂不自动处理。
+识别与恢复都不写死型号，且两个接入方向对称：目标是**当前占用两个 Pipe 的在线外接显示器**，对端外接端口/服务无链路或无 Pipe，内屏在线（或显式选择无内屏回退）。候选由**该显示器自己的 EDID** 现场生成并把本次 original／candidate 摘要写进本次运行清单，后续全部对清单核验，绝不用全局常量。方向只作为标签（“本机已验证”／“未验证的顺序”），不因此拒绝写入，也不放宽任何门槛。未知／重复设备、EDID 缺失、未知能力、服务 ID／路径变化、目标不可读、读回不确定都会停止，并给出**确切字段**。
 
-两台已经在线时直接不写入，包括正常闭盖会话；这不是闭盖恢复验收。不要通过改硬编码指纹、改旧备份或删除 pending 状态来绕过门槛。新增型号需独立审查和 apply／reset 实测。
+倒计时是主要安全网：超时未取得稳定证据就自动执行可核验的 mode0 撤销并报告结果；身份变化／服务消失／回读不确定时拒绝盲目撤销、保留 pending。两台已经在线时直接不写入，包括正常闭盖会话；这不是闭盖恢复验收。不要通过改硬编码指纹、改旧备份或删除 pending 状态来绕过门槛。新增型号需独立审查和 apply／reset 实测。
 
 ## 五、安全与记录
 
 使用 Apple 私有 IOAV 接口，系统更新后可能失效。接口返回 0 不代表恢复：必须校验 EDID 字节，再看 Pipe、系统在线和用户实际画面。
 
-写前重查故障，应用后有限轮询；两台约 120 Hz 且各独立单 Pipe 稳定后，重新核对同一目标和候选，才能撤销。撤销需读回原件，再单独检查双屏是否保持。操作意图会先写入 pending 事务；超时或身份变化时保留记录、允许针对自己事务安全撤销，不盲目换服务写入。
+写前重查故障，应用后有限轮询；两台约 120 Hz 且各独立单 Pipe 稳定后，重新核对同一目标和候选，才能撤销。撤销需读回原件，再单独检查双屏是否保持。操作意图会先写入 pending 事务；**超时未取得稳定证据会自动执行可核验的撤销**，若身份变化／服务消失／回读不确定则拒绝自动撤销、保留记录供人工按同一注册表 ID 与完整路径撤销，绝不盲目换服务写入。
 
 备份与报告在 `~/Library/Application Support/DisplayPipe/`，可能有设备标识与本地路径，分享前审阅。删除 App 不等于撤销覆盖。底层 helper 是内部实现，不建议直接调用或与旧实验 CLI 并发。
 
@@ -252,6 +258,6 @@ Python **没有内置**。打包时解析现有 `/usr/bin/python3` 的真实可�
 
 源码结构见英文第九节。EDID 处理复用 MIT 项目 [pipecap](https://github.com/a1678991/pipecap) 固定提交 `d045192de888188783b4da74b10ab05f4229c868`，保留原许可与打包声明，不含 BetterDisplay 实现或授权绕过。
 
-**许可证：原创 DisplayPipe 代码采用 MIT 许可证**，见 [`LICENSE`](LICENSE)，版权归 2026 TimmySheep。复用的上游组件（pipecap、`backend/edid-core`）继续沿用各自自带的 MIT 声明，源码树与打包产物中均保留。第三方商标与 Apple 私有接口不在本项目授权范围内。
+**公开源码不自动等于授予开源许可。** 原创 DisplayPipe 代码暂未指定项目级许可证，保留相应权利；明确标识的上游 MIT 组件仍按其自带许可证使用。
 
 公开仓库从审核后的源码快照开始，不包含私人开发历史、内部 Agent 指令、原始本机 EDID、事务备份或机器维护日志。当前仍是特定硬件的用户态 workaround，不是对 macOS 根因的系统补丁。

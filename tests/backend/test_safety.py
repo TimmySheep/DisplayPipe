@@ -33,6 +33,53 @@ class Safety(unittest.TestCase):
  def test_validation_rejects_length_checksum_header(self):
   for b in [bytes(128),b'bad']:
    with self.assertRaises(ValueError): dp.validate(b)
+class RangeLimits(unittest.TestCase):
+ """Display Range Limits descriptor precision: byte 4 offsets and byte 10 formula."""
+ def test_horizontal_range_offset_is_supported_recorded_and_still_cappable(self):
+  b=fixtures.panel_edid(range_offset_bits=0x08)
+  a=dp.audit(b)
+  self.assertEqual(a['unsupported'],[],'a horizontal-only offset leaves the vertical cap well defined')
+  self.assertEqual(a['ranges'][0]['offsetBits'],0x08)
+  self.assertTrue(a['ranges'][0]['horizontalOffsets'])
+  self.assertFalse(a['ranges'][0]['verticalOffsets'])
+  candidate=dp.candidate(b,120)
+  self.assertEqual(candidate['bytes'][fixtures.RANGE_MAX_OFFSET],120)
+  self.assertEqual(candidate['bytes'][8:18],b[8:18])
+
+ def test_vertical_or_reserved_offset_bits_fail_closed_naming_the_field(self):
+  for bits,needle in ((0x01,'vertical offsets'),(0x02,'vertical offsets'),(0x10,'reserved offset bits'),(0x80,'reserved offset bits')):
+   with self.subTest(bits=bits):
+    b=fixtures.panel_edid(range_offset_bits=bits)
+    problems=dp.audit(b)['unsupported']
+    self.assertTrue(any(needle in problem for problem in problems),problems)
+    self.assertTrue(any('0x%02x'%bits in problem for problem in problems),'the exact byte must be reported')
+    with self.assertRaisesRegex(ValueError,'unsupported'): dp.candidate(b,120)
+
+ def test_unsupported_range_timing_formula_is_named(self):
+  for formula in (2,4):
+   with self.subTest(formula=formula):
+    problems=dp.audit(fixtures.panel_edid(range_formula=formula))['unsupported']
+    self.assertTrue(any('range timing formula' in problem for problem in problems),problems)
+
+ def test_cap_allowance_is_descriptor_quantization_not_a_mode_tolerance(self):
+  nominal=dict(refresh_hz=120.0056,v_total=2250,h_total=4400)
+  allowance=dp.cap_allowance(nominal)
+  self.assertLess(allowance,0.2)
+  self.assertLess(120.0056-120,allowance,'a nominal 120 Hz descriptor stays inside the allowance')
+  self.assertGreater(144,120+allowance,'a real mode step never fits inside the allowance')
+  self.assertGreater(120.5-120,dp.cap_allowance(dict(refresh_hz=120.5,v_total=2250,h_total=4400)))
+
+ def test_quantized_120_mode_is_kept_and_reported(self):
+  b=fixtures.quantized_120_edid()
+  candidate=dp.candidate(b,120)
+  self.assertTrue(candidate['retainedAboveCap'],'the retained nominal mode is reported, not hidden')
+  entry=candidate['retainedAboveCap'][0]
+  self.assertGreater(entry['refresh_hz'],120)
+  self.assertLess(entry['refresh_hz']-120,entry['allowanceHz'])
+  self.assertEqual(candidate['capAllowanceRule'],'per-timing descriptor quantization')
+  self.assertEqual({round(t['refresh_hz']) for t in candidate['dropped']},{144,160})
+
+
 class MissingEDID(unittest.TestCase):
  def test_missing_edid_preflight_is_structured_and_never_writes(self):
   import json

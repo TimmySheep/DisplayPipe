@@ -65,6 +65,19 @@ def vic(n):
  hz=60 if n==5 else 50
  return dict(vic=n,width=1920,height=1080,interlaced=True,fieldHz=hz,frameHz=hz/2,pixelClockHz=74250000)
 
+def cap_allowance(timing):
+ """Per-timing field quantization, never a mode tolerance.
+
+ DTD and DisplayID Type I descriptors store the totals, so a nominal 120.00 Hz mode can
+ decode as 120.006 Hz (one line out of a 2250-line total). The allowance is derived from
+ that timing's own totals and stays far below any real mode step (tens of Hz here), so a
+ genuinely above-cap mode is still refused instead of hiding inside an upstream +0.5 Hz
+ tolerance.
+ """
+ v_total=timing.get('v_total') or 0; h_total=timing.get('h_total') or 0
+ span=(1.0/v_total if v_total else 0)+(1.0/h_total if h_total else 0)
+ return timing.get('refresh_hz',0)*span+1e-6
+
 def core(b,action='parse',hz=120):
  root=pathlib.Path(os.environ.get('DISPLAYPIPE_STATE',str(pathlib.Path.home()/'Library/Application Support/DisplayPipe')))
  scratch=root/'scratch'; archive=root/'scratch-archive'
@@ -84,8 +97,16 @@ def audit(b):
  for o in range(54,126,18):
   d=b[o:o+18]
   if d[:2]==b'\0\0' and d[3]==0xfd:
-   ranges.append(dict(offset=o,minHz=d[5],maxHz=d[6],formula=d[10],maxClockMHz=d[9]*10))
-   if d[4] or d[10] not in (0,1): unsupported.append('range offsets/CVT/secondary GTF')
+   # Byte 4 of a Display Range Limits descriptor holds the "range limits offsets" bits. Only the
+   # vertical bits change the meaning of the max vertical rate byte this tool rewrites; the
+   # horizontal bits leave that byte absolute, and reserved bits are never assumed harmless.
+   offsets=d[4]
+   ranges.append(dict(offset=o,minHz=d[5],maxHz=d[6],formula=d[10],maxClockMHz=d[9]*10,offsetBits=offsets,
+                      verticalOffsets=bool(offsets&0x03),horizontalOffsets=bool(offsets&0x0c),
+                      reservedOffsetBits=offsets&0xf0))
+   if offsets&0x03: unsupported.append('range limits vertical offsets byte4=0x%02x'%offsets)
+   elif offsets&0xf0: unsupported.append('range limits reserved offset bits byte4=0x%02x'%offsets)
+   if d[10] not in (0,1): unsupported.append('range timing formula byte10=0x%02x'%d[10])
   elif d[:2]==b'\0\0' and d[3] not in (0x10,0xfc,0xff): unsupported.append('base descriptor '+hex(d[3]))
  for off in range(128,len(b),128):
   x=b[off:off+128]; record=dict(block=off//128,tag=x[0],items=[])
@@ -146,6 +167,7 @@ def candidate(b,hz):
  r=core(b,'cap',hz); out=bytearray.fromhex(r['bytes'])
  for rg in a['ranges']:
   if rg['minHz']>hz: raise ValueError('unsupported range minimum')
+  if rg['offsetBits']&0x03: raise ValueError('unsupported range vertical offsets byte4=0x%02x'%rg['offsetBits'])
   out[rg['offset']+6]=min(rg['maxHz'],int(hz))
  for vr in a['vrr']:
   if vr['maxHz']>hz: raise ValueError('unsupported VRR maximum exceeds cap')
@@ -153,8 +175,12 @@ def candidate(b,hz):
  out=bytes(out); after=audit(out)
  if after['unsupported']: raise ValueError('unsupported candidate: '+', '.join(after['unsupported']))
  if out[8:54]!=b[8:54] or len(out)!=len(b) or out[126]!=b[126]: raise ValueError('identity/extension preservation failure')
- if any(t['refresh_hz']>hz for t in after['decoded']['timings']): raise ValueError('unsupported retained timing above strict cap')
- return dict(bytes=out,sha256=sha(out),originalSHA256=sha(b),maxHz=hz,dropped=r['dropped'],audit=after,recoveryValidated=False)
+ if any(t['refresh_hz']-hz>cap_allowance(t) for t in after['decoded']['timings']): raise ValueError('unsupported retained timing above strict cap')
+ retained=[dict(h_active=t['h_active'],v_active=t['v_active'],refresh_hz=t['refresh_hz'],
+                allowanceHz=round(cap_allowance(t),6),source=t['source'])
+           for t in after['decoded']['timings'] if t['refresh_hz']>hz]
+ return dict(bytes=out,sha256=sha(out),originalSHA256=sha(b),maxHz=hz,dropped=r['dropped'],audit=after,
+             retainedAboveCap=retained,capAllowanceRule='per-timing descriptor quantization',recoveryValidated=False)
 
 
 def transact(action,original,proposed,execute,setter,reader,snapshot):
@@ -176,12 +202,27 @@ def inventory():
  return json.loads(subprocess.check_output([str(BASE/'build/DisplayPipeIO'),'inventory'],timeout=5))
 
 def recovery_evidence(before,after,target,peer,address):
+ peers=[peer] if isinstance(peer,tuple) else list(peer)
  def mappings(s): return [m for c in s.get('crossbar',[]) for m in c.get('ConnectionMapping',[]) if m.get('Address')==address]
  a=mappings(before);b=mappings(after)
  released=len(a)==1 and len(b)==1 and len(a[0].get('PipeIDs',[]))>len(b[0].get('PipeIDs',[]))>0
  external=[d for d in after.get('online',[]) if not d.get('builtin',True)]
- both=all(sum((d['vendor'],d['product'])==identity for d in external)==1 for identity in (target,peer)) and target!=peer
+ both=bool(peers) and all(sum((d['vendor'],d['product'])==identity for d in external)==1 for identity in [target]+peers) and target not in peers
  return dict(pipeReleased=released,bothOnline=both,physicalInputConfirmed=False,recoveryValidated=False,reason='Physical input timing and user-visible signal still require endpoint acceptance; CoreGraphics modes are not wire timing.')
+
+def external_identities(snapshot):
+ """Vendor:product of every external display this snapshot reports, discovered at runtime."""
+ def pair(b): return (int.from_bytes(b[8:10],'big'),int.from_bytes(b[10:12],'little'))
+ found=[]
+ for display in snapshot.get('online',[]):
+  if display.get('builtin'): continue
+  candidate=(display.get('vendor'),display.get('product'))
+  if candidate not in found: found.append(candidate)
+ for service in snapshot.get('services',[]):
+  try: candidate=pair(service_edid(service))
+  except ValueError: continue
+  if candidate not in found: found.append(candidate)
+ return found
 
 def main():
  p=argparse.ArgumentParser(description='DisplayPipe safe backend. JSON output. All writes require explicit authorization.')
@@ -232,7 +273,8 @@ def main():
    r['immediateReadbackEqual']=native_result.get('copyStatus')==0 and native_result.get('effectiveEDID')==native_expected.hex()
    if not r['immediateReadbackEqual'] and r['state']=='edid-verified': r['state']='readback-mismatch'
    info=audit(m['bytes'])['identity'];target=(info['vendor'],info['product'])
-   peer=(0x22f6,0x6346) if target==(0x3103,0x907d) else (0x3103,0x907d)
+   # Peers are discovered from this snapshot; no other display identity is compiled in.
+   peer=[pair for pair in external_identities(before) if pair!=target]
    name=audit(m['bytes'])['decoded'].get('name')
    rows=[row for c in before['crossbar'] for row in c.get('ConnectionMapping',[]) if row.get('ProductName')==name]
    r['recoveryEvidence']=recovery_evidence(before,r.get('observedAfter',{}),target,peer,rows[0]['Address'] if len(rows)==1 else '')

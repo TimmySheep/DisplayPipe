@@ -1,9 +1,32 @@
 // Independent read-only probe. Does not call any display setter.
+// Reports the EDID descriptor 0xFC monitor name (percent-encoded, so the line stays
+// a space-separated key=value record) and never prints serial strings.
 #import <Foundation/Foundation.h>
 #import <IOKit/IOKitLib.h>
 #import <dlfcn.h>
 typedef CFTypeRef (*CreateFn)(CFAllocatorRef, io_service_t);
 typedef IOReturn (*CopyFn)(CFTypeRef, CFDataRef *);
+
+// Descriptor 0xFC: printable ASCII, '%' and space encoded as %XX, terminated at padding.
+static NSString *MonitorName(const unsigned char *b, CFIndex n, BOOL *found) {
+    *found = NO;
+    if (!b || n < 126) return @"";
+    for (CFIndex o = 54; o + 18 <= 126; o += 18) {
+        const unsigned char *d = b + o;
+        if (d[0] || d[1] || d[3] != 0xfc) continue;
+        NSMutableString *s = [NSMutableString string];
+        for (int i = 5; i < 18; i++) {
+            unsigned char c = d[i];
+            if (c == '\n' || c == '\r') break;
+            if (c >= 32 && c < 127 && c != '%') [s appendFormat:@"%c", c];
+            else [s appendFormat:@"%%%02X", c];
+        }
+        *found = YES;
+        return s;
+    }
+    return @"";
+}
+
 int main(void) { @autoreleasepool {
  void *h=dlopen("/System/Library/Frameworks/IOKit.framework/IOKit",RTLD_LAZY|RTLD_LOCAL);
  CreateFn create=(CreateFn)dlsym(h,"IOAVServiceCreateWithService");
@@ -31,7 +54,9 @@ int main(void) { @autoreleasepool {
      for(CFIndex off=0;off+128<=n;off+=128){unsigned sum=0;for(int j=0;j<128;j++)sum+=b[off+j]; if(sum%256)valid=NO;}
      unsigned vendor=n>=12?((unsigned)b[8]<<8)|b[9]:0;
      unsigned model=n>=12?b[10]|((unsigned)b[11]<<8):0;
-     printf("EDID bytes=%ld checksumAndLengthValid=%s vendor=0x%04x model=0x%04x\n",(long)n,valid?"true":"false",vendor,model);
+     BOOL named=NO; NSString *name=MonitorName(valid?b:NULL,n,&named);
+     printf("EDID bytes=%ld checksumAndLengthValid=%s vendor=0x%04x model=0x%04x name=%s named=%s\n",
+            (long)n,valid?"true":"false",vendor,model,name.UTF8String,named?"true":"false");
      total++;
     }
     if(data)CFRelease(data);CFRelease(av);

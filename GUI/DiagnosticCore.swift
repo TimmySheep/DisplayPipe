@@ -12,6 +12,11 @@ struct EDIDReading: Codable {
     let valid: Bool
     let vendor: String
     let model: String
+    // Descriptor 0xFC monitor name, when the read-only probe could expose it.
+    let name: String?
+    let named: Bool
+    var vendorNumber: UInt32? { DiagnosticCore.number(vendor) }
+    var modelNumber: UInt32? { DiagnosticCore.number(model) }
 }
 enum DiagnosticCore {
     static func mappings(_ data: Data) throws -> [PipeMapping] {
@@ -32,6 +37,25 @@ enum DiagnosticCore {
         walk(tree)
         return result.sorted { ($0.role, $0.name) < ($1.role, $1.name) }
     }
+    static func number(_ text: String) -> UInt32? {
+        var value = text.lowercased()
+        if value.hasPrefix("0x") { value = String(value.dropFirst(2)) }
+        return UInt32(value, radix: 16)
+    }
+    /// The probe percent-encodes the 0xFC name so the line stays space-separated key=value.
+    static func decodedName(_ text: String?) -> String? {
+        guard let text = text, !text.isEmpty else { return nil }
+        var bytes = [UInt8](); var index = text.startIndex
+        while index < text.endIndex {
+            if text[index] == "%", let end = text.index(index, offsetBy: 2, limitedBy: text.endIndex) {
+                let hex = String(text[text.index(after: index)...end])
+                if let value = UInt8(hex, radix: 16) { bytes.append(value); index = text.index(after: end); continue }
+            }
+            bytes.append(contentsOf: Array(String(text[index]).utf8)); index = text.index(after: index)
+        }
+        let name = String(decoding: bytes, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? nil : String(name.prefix(24))
+    }
     static func edids(_ text: String) -> [EDIDReading] {
         var service = ""
         var result: [EDIDReading] = []
@@ -42,7 +66,9 @@ enum DiagnosticCore {
             }, uniquingKeysWith: { _, last in last })
             if line.hasPrefix("SERVICE ") { service = fields["id"] ?? "" }
             if line.hasPrefix("EDID "), !service.isEmpty, let bytes = fields["bytes"].flatMap(Int.init), let valid = fields["checksumAndLengthValid"], ["true", "false"].contains(valid), let vendor = fields["vendor"], let model = fields["model"] {
-                result.append(EDIDReading(serviceID: service, byteCount: bytes, valid: valid == "true", vendor: vendor, model: model))
+                let named = fields["named"] == "true"
+                result.append(EDIDReading(serviceID: service, byteCount: bytes, valid: valid == "true", vendor: vendor,
+                                          model: model, name: named ? decodedName(fields["name"]) : nil, named: named))
             }
         }
         return result
@@ -67,7 +93,7 @@ struct DisplayReading: Codable {
     let reportedRefreshHz: Double?
 }
 struct Snapshot: Encodable {
-    let version = "0.1"
+    let version = "0.2"
     let readOnly = true
     let recoveryValidated = false
     let refreshedAt: String
@@ -84,7 +110,7 @@ struct Snapshot: Encodable {
         object["status"] = status
         object["hardwareSummary"] = hardwareSummary
         object["collectionSummary"] = collectionSummary
-        object["targetCards"] = try JSONSerialization.jsonObject(with: encoder.encode(targetCards))
+        object["externalCards"] = try JSONSerialization.jsonObject(with: encoder.encode(externalCards))
         return try JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys])
     }
 }
