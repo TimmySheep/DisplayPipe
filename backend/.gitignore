@@ -1,0 +1,6 @@
+build/
+private/
+reference/
+__pycache__/
+archive/
+edid-core/target/
