@@ -87,6 +87,21 @@ final class MemoryPreferences: UserDefaults {
                 check(!texts().contains(unsafe), "collection error is not exposed on home")
             }
         }
+        // Removed home summary must stay absent for healthy, empty and failed enumeration.
+        for choice in [LanguageChoice.english, .simplifiedChinese] {
+            delegate.selectLanguage(choice)
+            for number in [0, 2] {
+                for failed in [false, true] {
+                    let reasons = failed ? ["CoreGraphics regression failure", "private collection reason"] : []
+                    delegate.present(Snapshot(refreshedAt: "x", displays: Array(snapshot.displays.prefix(number)), mappings: [], edids: [], errors: reasons))
+                    check(!texts().contains(L10n.text("External displays: {0}", String(number))), "no external-count summary row on home in either language")
+                    check(!texts().contains(choice == .english ? "Incomplete readings" : "采集不完整"), "no incomplete-readings summary on home in either language")
+                    buttons().first { $0.title == L10n.text("Details") }!.performClick(nil)
+                    if failed { check(texts().contains("private collection reason"), "removed home summary does not discard detailed collection errors") }
+                    buttons().first { $0.title == L10n.text("Details") }!.performClick(nil)
+                }
+            }
+        }
         delegate.selectLanguage(.english)
         check(Set(prefs.values.keys) == [L10n.preferenceKey, AppDelegate.noFallbackPreferenceKey], "only language and explicit opt-in preferences are persisted")
         check(L10n.text("Refresh") == "Refresh", "switching immediately updates English UI")

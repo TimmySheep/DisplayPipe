@@ -30,7 +30,6 @@ enum L10n {
     static let catalog: [String: String] = [
         " Beijing time UTC+8": " 北京时间 UTC+8",
         " and ": " 与 ",
-        " · Incomplete readings · See Details": " · 采集不完整 · 请查看详细信息",
         " · Refresh rate unknown": " · 刷新率未知",
         "(no candidate paths)": "（无可尝试的路径）",
         "Action required · Pending override": "需要处理 · 有未结束覆盖",
@@ -77,7 +76,6 @@ enum L10n {
         "Fault detected · Write refused": "已识别故障 · 当前拒绝写入",
         "First use of this combination": "首次使用该组合",
         "Force quitting may leave a pending override. Reopening the app exposes manual undo.": "强制退出可能留下未结束覆盖；再次打开App会显示手动撤销。",
-        "Incomplete readings · See Details": "采集不完整 · 请查看详细信息",
         "Language": "语言",
         "No external displays detected": "未检测到外接显示器",
         "No recovery needed": "无需恢复",

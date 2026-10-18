@@ -29,7 +29,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var detailsButton: NSButton!
     private var stateLabel: NSTextField!
     private var stateDetail: NSTextField!
-    private var hardwareLine: NSTextField!
     private var statusLabels: [NSTextField] = []
     private var detailsScroll: NSScrollView?
     private var diagnosticsLabel: NSTextField?
@@ -134,8 +133,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         displayRowsStack = NSStackView(); displayRowsStack.orientation = .vertical; displayRowsStack.spacing = 10
         add(displayRowsStack)
         rebuildDisplayRows([(name: L10n.text("External display"), status: L10n.text("Checking"))])
-        hardwareLine = label(L10n.text("Checking connections…"), size: 12); hardwareLine.textColor = .secondaryLabelColor
-        add(hardwareLine)
         recoverButton = NSButton(title: L10n.text("Recover Displays"), target: self, action: #selector(recover)); recoverButton.bezelStyle = .rounded; recoverButton.controlSize = .large; recoverButton.keyEquivalent = "\r"
         undoButton = NSButton(title: L10n.text("Undo This Override"), target: self, action: #selector(undo)); undoButton.bezelStyle = .rounded; undoButton.isHidden = true
         activity = NSProgressIndicator(); activity.style = .spinning; activity.controlSize = .small; activity.isDisplayedWhenStopped = false
@@ -225,7 +222,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         languageLabel?.stringValue = L10n.text("Language"); updateLanguageSelector()
         quitMenuItem?.title = L10n.text("Quit DisplayPipe")
         if let value = snapshot { renderSnapshot(value) }
-        else { rebuildDisplayRows([(name: L10n.text("External display"), status: L10n.text("Checking"))]); hardwareLine.stringValue = L10n.text("Checking connections…") }
+        else { rebuildDisplayRows([(name: L10n.text("External display"), status: L10n.text("Checking"))]) }
         if refreshing { stateLabel.stringValue = L10n.text("Checking connections…") }
         else if operationActive && recoveryObject.isEmpty { stateLabel.stringValue = L10n.text("Checking identity and backup…") }
         else if recoveryObject.isEmpty { stateLabel.stringValue = L10n.text("Checking connections…") }
@@ -354,7 +351,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             ? [(name: value.coreGraphicsFailed ? L10n.text("External displays: enumeration failed") : L10n.text("No external displays detected"), status: value.coreGraphicsFailed ? L10n.text("Unknown (enumeration failed)") : L10n.text("Check connections"))]
             : cards.map { (name: $0.name, status: $0.stateText) }
         rebuildDisplayRows(rows)
-        hardwareLine.stringValue = value.coreGraphicsFailed ? L10n.text("Incomplete readings · See Details") : L10n.text("External displays: {0}", String(value.externalDisplays.count)) + (value.errors.isEmpty ? "" : L10n.text(" · Incomplete readings · See Details"))
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if operationActive {

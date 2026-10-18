@@ -31,7 +31,7 @@ import AppKit
         delegate.presentRecovery(["state": "already-healthy"])
         check(texts().filter { $0 == "在线 · 120 Hz" }.count == 2, "one concise online/Hz row per discovered external")
         check(texts().contains("PANEL A") && texts().contains("PANEL B"), "rows show the real display names")
-        check(texts().joined().contains("外接显示器 2 台") && !texts().joined().contains("内屏"), "compact view reports only external count")
+        check(!texts().joined().contains("外接显示器 2 台") && !texts().joined().contains("内屏"), "compact view omits the redundant count summary")
         check(texts().joined().contains("无需恢复"), "healthy state stays one calm line")
         check(button("撤销本次覆盖").isHidden && button("恢复双屏").isEnabled, "healthy state hides undo and keeps the guarded no-op action")
 
