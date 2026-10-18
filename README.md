@@ -45,12 +45,16 @@ A manual, local **user-space workaround** for a narrowly verified fault:
 
 1. Connect the two displays and open DisplayPipe.
 2. Read the compact connection state.
-3. Press **Recover Displays** (the current UI is in Chinese: `恢复双屏`) and confirm once.
+3. Press **Recover Displays** / **恢复双屏** and confirm once.
 4. The guarded backend creates a fresh backup, applies a temporary 120 Hz capability limit, waits for stable allocation/online evidence, removes the override, and verifies the original bytes.
 
 This does **not** patch macOS system files or flash monitor firmware. It is not a generic EDID editor, a driver, or a guarantee that every high-refresh display combination is supported. There is no startup agent, background recovery loop, network service, browser shell, or additional Python package dependency.
 
-The UI uses native AppKit: one state, two concise monitor rows, one main action, and optional details. Raw EDID/Pipe diagnostics are hidden by default; the details views are created only when opened and released on collapse. Pending-transaction undo remains prominent when needed.
+The UI uses native AppKit: one state, one row per discovered external display, one main action, and optional details. Raw EDID/Pipe diagnostics are hidden by default; the details views are created only when opened and released on collapse. Pending-transaction undo remains prominent when needed.
+
+Version **0.2.3 (build 5)** adds native English and Simplified Chinese UI. The default follows the first preferred system language: `zh` / `zh-*` selects Simplified Chinese; other or unavailable languages use English. **Details → Language** offers **System / English / 简体中文**. Only this language choice is saved; changing it immediately redraws cached UI without refreshing displays or running recovery. Display names, IDs, ports and paths remain verbatim.
+
+The home view shows only external-display counts and structured, concise state/action messages; built-in-display and lid context is exclusively in Details. Refusals and failures direct you to Details, which preserves the full reason under **Raw technical diagnostics (original language)**. These backend/collector diagnostics may remain Chinese or English; the app does not pretend they are translated. The advanced no-internal-fallback permission remains default-off, session-only and unpersisted in Details. Countdown, identity checks and all backend safety gates are unchanged.
 
 ## 4. What actually worked
 
@@ -146,7 +150,7 @@ DISPLAYPIPE_TEST_APP="$HOME/Applications/DisplayPipe.app" \
   python3 scripts/test-package.py -v
 ```
 
-Recorded checks: Rust 14; backend Python 74; Swift parser 23, recovery presentation 38, AppKit hierarchy 32; scoped registry equivalence 2; icon 2; packaging 8. These are local test results, **not hosted CI**. Native hierarchy tests are not screenshots or actual button-interaction acceptance.
+Recorded checks: Rust 14; backend Python 74; Swift parser 23, recovery presentation 55, AppKit hierarchy 32, localization 312; scoped registry equivalence 2; icon 2; packaging 10. These are local test results, **not hosted CI**. Native hierarchy tests are not screenshots or actual button-interaction acceptance.
 
 | Measurement | 0.2 | 0.2.1 |
 | --- | ---: | ---: |
@@ -226,7 +230,9 @@ DisplayPipe 是一个轻量的原生 macOS 工具，用于调查并针对特定�
 
 目标体验：接回两条线 → 开 App 看状态 → 点击“恢复双屏”并确认一次 → 自动备份、临时限制、等待双屏稳定、撤销并核验。
 
-原生 AppKit 首页按**运行时枚举到的外接显示器数量**逐行显示真实名称（EDID 0xFC → CoreGraphics 名称 → vendor:model，读不到就照实写）、在线状态与刷新率，加一行内屏状态和台数、一个主按钮。详细诊断默认折叠、按需创建并释放；有未结束覆盖时才突出撤销入口。无浏览器外壳、启动 Agent、常驻恢复轮询、网络服务或额外 Python 包。
+原生 AppKit 首页按**运行时枚举到的外接显示器数量**逐行显示真实名称（EDID 0xFC → CoreGraphics 名称 → vendor:model，读不到就照实写）、在线状态与刷新率，加一行外接台数、一个主按钮。详细诊断默认折叠、按需创建并释放；有未结束覆盖时才突出撤销入口。无浏览器外壳、启动 Agent、常驻恢复轮询、网络服务或额外 Python 包。
+
+**0.2.3（build 5）** 提供英文／简体中文原生界面，默认跟随系统首选语言（`zh`／`zh-*` → 简体中文，其它或不可用 → 英文）。在 **详细信息 → 语言** 选择 **跟随系统／English／简体中文**；只保存语言选择，切换立即重绘已有数据，不重新采集、不触发恢复。显示器名称、ID、端口和路径不翻译。首页不显示内屏或机盖说明；错误只给简洁可操作提示，完整原因保留在详细信息的 **原始技术诊断（保留原文）**，该区可能仍为后端原始中英文，不冒充已翻译。无内屏回退许可只在详细信息中显示，仍默认不勾选、仅本次有效且不保存；倒计时、身份校验及后端安全门槛不变。
 
 识别与恢复都不写死型号，且两个接入方向对称：目标是**当前占用两个 Pipe 的在线外接显示器**，对端外接端口/服务无链路或无 Pipe，内屏在线（或显式选择无内屏回退）。候选由**该显示器自己的 EDID** 现场生成并把本次 original／candidate 摘要写进本次运行清单，后续全部对清单核验，绝不用全局常量。方向只作为标签：某组合完成过一次可核验运行后标注“接入顺序（本机已验证）”，否则标注中性的“首次使用该组合”，不因此拒绝写入，也不放宽任何门槛。未知／重复设备、EDID 缺失、未知能力、服务 ID／路径变化、目标不可读、读回不确定都会停止，并给出**确切字段**。
 
@@ -254,7 +260,7 @@ Python **没有内置**。打包时解析现有 `/usr/bin/python3` 的真实可�
 
 构建中的只读打包测试有部分依赖测试机上已经正常工作的双屏，陌生硬件不保证通过；不要因此删掉安全检查。后续硬件测试失败时，构建产物可能已经存在，要检查完整输出。App 是 ad-hoc 签名，**没有 Developer ID 和公证**，不承诺其他 Mac 的 Gatekeeper 自动放行，不应关闭系统安全保护。
 
-测试命令见英文第八节。本轮记录的本地检查：Rust14、后端 Python74、Swift23＋38＋32、范围查询2、图标2、打包8。不是线上 CI，也不代表每次真实窗口按钮交互都已验收。
+测试命令见英文第八节。本轮记录的本地检查：Rust14、后端 Python74、Swift23＋55＋32、语言与界面312、范围查询2、图标2、打包10。不是线上 CI，也不代表每次真实窗口按钮交互都已验收。
 
 优化前后应用文件体积约 2.26 MB→1.85 MB（减少18.34%）；相同启动后15／16／17秒采样的空闲 RSS 均值约160 MiB→89 MiB。本轮内存约低44%，不是所有状态的保证，不含临时辅助进程。体积统计是文件逻辑长度，不含保留的旧版／构建／运行记录；不是总磁盘占用。IORegistry 读取范围缩小后，实测约43 MB→3,213字节且保留当前所有 Pipe 映射；图标十种表示均逐像素一致。
 

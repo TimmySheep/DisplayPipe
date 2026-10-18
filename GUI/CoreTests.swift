@@ -14,6 +14,8 @@ import Foundation
         EDIDReading(serviceID: service, byteCount: bytes, valid: valid, vendor: vendor, model: model, name: name, named: named)
     }
     static func main() throws {
+        L10n.preferences = TestLanguagePreferences()
+
         // ---- registry and probe parsing ----
         let tree: [[String: Any]] = [["IORegistryEntryChildren": [["ConnectionMapping": [["ProductName": "PANEL-A", "role": "DCPEXT1", "PipeIDs": [1, 0], "MaxPipes": 2]]]]]]
         let data = try PropertyListSerialization.data(fromPropertyList: tree, format: .xml, options: 0)
@@ -52,7 +54,7 @@ import Foundation
               && snapshot.collectionSummary.contains("采集完成"),
               "hardware summary is dynamic and reports the internal display state")
 
-        let anonymous = Snapshot(refreshedAt: "x", displays: [online(id: 5, name: "未知显示器（CG 5）", vendor: 0x1111, model: 0x2222, hz: nil)],
+        let anonymous = Snapshot(refreshedAt: "x", displays: [online(id: 5, name: "", vendor: 0x1111, model: 0x2222, hz: nil)],
                                  mappings: [], edids: [], errors: [])
         check(anonymous.externalCards.first?.nameSource == "vendor-model"
               && anonymous.externalCards.first?.name == "0x1111:0x2222"
@@ -114,4 +116,8 @@ import Foundation
         catch { print("PASS: malformed plist throws") }
         print("PASS: dynamic identification checks complete")
     }
+}
+
+private final class TestLanguagePreferences: UserDefaults {
+    override func string(forKey key: String) -> String? { key == L10n.preferenceKey ? LanguageChoice.simplifiedChinese.rawValue : nil }
 }

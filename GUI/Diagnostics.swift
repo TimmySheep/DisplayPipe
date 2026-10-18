@@ -41,7 +41,7 @@ enum Diagnostics {
             if result == .success {
                 for id in ids.prefix(Int(count)) {
                     let mode = CGDisplayCopyDisplayMode(id)
-                    displays.append(DisplayReading(id: id, name: names[id] ?? "未知显示器（CG \(id)）", builtin: CGDisplayIsBuiltin(id) != 0, vendor: CGDisplayVendorNumber(id), model: CGDisplayModelNumber(id), logicalWidth: mode?.width, logicalHeight: mode?.height, renderWidth: mode?.pixelWidth, renderHeight: mode?.pixelHeight, reportedRefreshHz: mode?.refreshRate))
+                    displays.append(DisplayReading(id: id, name: names[id] ?? "", builtin: CGDisplayIsBuiltin(id) != 0, vendor: CGDisplayVendorNumber(id), model: CGDisplayModelNumber(id), logicalWidth: mode?.width, logicalHeight: mode?.height, renderWidth: mode?.pixelWidth, renderHeight: mode?.pixelHeight, reportedRefreshHz: mode?.refreshRate))
                 }
             }
         }

@@ -4,8 +4,15 @@ import hashlib, json, os, pathlib, shutil, struct, subprocess, sys, unittest, uu
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 APP=pathlib.Path(os.environ.get('DISPLAYPIPE_TEST_APP',str(ROOT/'.build/DisplayPipe.app')))
 class Package(unittest.TestCase):
+ def test_release_version_and_original_mit_license(self):
+  import plistlib
+  info=plistlib.loads((APP/'Contents/Info.plist').read_bytes())
+  self.assertEqual((info['CFBundleShortVersionString'],info['CFBundleVersion']),('0.2.3','5'))
+ def test_original_mit_license(self):
+  self.assertTrue((APP/'Contents/Resources/licenses/DisplayPipe-MIT.txt').is_file(),'original MIT license must ship with upstream notices')
+  self.assertEqual((APP/'Contents/Resources/licenses/DisplayPipe-MIT.txt').read_bytes(),(ROOT/'LICENSE').read_bytes())
  def test_bundle_resources(self):
-  for rel in ['backend/recovery.py','backend/displaypipe.py','backend/build/DisplayPipeIO','backend/edid-core/target/release/displaypipe-edid','docs/USER_GUIDE.md','licenses/pipecap-MIT.txt','licenses/edid-core-MIT.txt','python-path.txt','DisplayPipe.icns']:
+  for rel in ['backend/recovery.py','backend/displaypipe.py','backend/build/DisplayPipeIO','backend/edid-core/target/release/displaypipe-edid','docs/USER_GUIDE.md','licenses/DisplayPipe-MIT.txt','licenses/pipecap-MIT.txt','licenses/edid-core-MIT.txt','python-path.txt','DisplayPipe.icns']:
    self.assertTrue((APP/'Contents/Resources'/rel).is_file(),rel)
  def test_runtime_only_manifest(self):
   resources=APP/'Contents/Resources'
@@ -14,7 +21,7 @@ class Package(unittest.TestCase):
   manifest=json.loads((resources/'MANIFEST.sha256.json').read_text())
   actual={str(p.relative_to(resources)):hashlib.sha256(p.read_bytes()).hexdigest() for p in resources.rglob('*') if p.is_file() and p.name!='MANIFEST.sha256.json'}
   self.assertEqual(manifest,actual,'manifest must enumerate and hash every shipped runtime resource exactly')
-  self.assertEqual(set(actual),{'backend/displaypipe.py','backend/recovery.py','backend/build/DisplayPipeIO','backend/edid-core/target/release/displaypipe-edid','docs/USER_GUIDE.md','docs/UPSTREAM.md','licenses/pipecap-MIT.txt','licenses/edid-core-MIT.txt','licenses/NOTICE.txt','python-path.txt','DisplayPipe.icns'})
+  self.assertEqual(set(actual),{'backend/displaypipe.py','backend/recovery.py','backend/build/DisplayPipeIO','backend/edid-core/target/release/displaypipe-edid','docs/USER_GUIDE.md','docs/UPSTREAM.md','licenses/DisplayPipe-MIT.txt','licenses/pipecap-MIT.txt','licenses/edid-core-MIT.txt','licenses/NOTICE.txt','python-path.txt','DisplayPipe.icns'})
  def test_recorded_python_is_a_hint_not_a_hard_dependency(self):
   recorded=(APP/'Contents/Resources/python-path.txt').read_text().strip()
   self.assertTrue(pathlib.Path(recorded).is_absolute(),'the build machine path stays recorded as a hint')
@@ -87,8 +94,8 @@ class Package(unittest.TestCase):
   env.pop('DISPLAYPIPE_PYTHON',None)
   result=subprocess.run([str(exe),'--recovery-smoke-json'],capture_output=True,text=True,timeout=25,env=env)
   self.assertEqual(result.returncode,2)
-  self.assertIn('缺少可用的现有 Python 3.9+',result.stderr)
-  self.assertIn('未写入显示',result.stderr)
+  self.assertTrue(any(text in result.stderr for text in ['缺少可用的现有 Python 3.9+','No usable existing Python 3.9+']),result.stderr)
+  self.assertTrue(any(text in result.stderr for text in ['未写入显示','No display writes occurred']),result.stderr)
   self.assertIn('/nonexistent/only-candidate',result.stderr)
   # 3. An unusable explicit override is honoured as a decision, not silently replaced.
   env=dict(os.environ); env['DISPLAYPIPE_PYTHON']='/nonexistent/override-python3'

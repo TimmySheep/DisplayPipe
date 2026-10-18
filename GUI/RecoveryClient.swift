@@ -72,11 +72,11 @@ enum RecoveryClient {
     }
 
     static func missingInterpreter(ordered: [String], overridden: Bool) -> NSError {
-        let tried = ordered.isEmpty ? "（无可尝试的路径）" : ordered.joined(separator: "、")
+        let tried = ordered.isEmpty ? L10n.text("(no candidate paths)") : ordered.joined(separator: ", ")
         let advice = overridden
-            ? "DISPLAYPIPE_PYTHON 指向的解释器不可执行或低于 3.9；请修正该变量或取消它。"
-            : "请安装或提供 Python 3.9+（例如 Xcode/命令行工具自带 /usr/bin/python3，或用 DISPLAYPIPE_PYTHON 指定已有解释器）。"
-        return failure("缺少可用的现有 Python 3.9+。已尝试：\(tried)。本App不安装任何运行时、不修改系统；\(advice)未写入显示。")
+            ? L10n.text("DISPLAYPIPE_PYTHON is not executable or is older than 3.9; correct or unset it. ")
+            : L10n.text("Provide Python 3.9+ (for example /usr/bin/python3 from Xcode/command line tools, or an existing interpreter via DISPLAYPIPE_PYTHON). ")
+        return failure(L10n.text("No usable existing Python 3.9+. Tried: {0}. This app installs no runtime and does not modify the system. {1}No display writes occurred.", String(tried), String(advice)))
     }
 
     static func recordedInterpreter(resources: URL) -> String? {
@@ -86,7 +86,7 @@ enum RecoveryClient {
     }
 
     static func run(_ command: [String], progress: @escaping ([String: Any]) -> Void = { _ in }) throws -> [String: Any] {
-        guard let resources = Bundle.main.resourceURL else { throw failure("应用资源路径缺失") }
+        guard let resources = Bundle.main.resourceURL else { throw failure(L10n.text("Application resources are missing")) }
         let environment = ProcessInfo.processInfo.environment
         let python = try resolvedInterpreter(recorded: recordedInterpreter(resources: resources),
                                             override: environment["DISPLAYPIPE_PYTHON"],
@@ -116,7 +116,7 @@ enum RecoveryClient {
             }
         }
         process.waitUntilExit(); watchdog.cancel()
-        guard let value = result else { throw failure("后端中断或依赖不可用（解释器 \(python)，退出 \(process.terminationStatus)）。若曾开始恢复，请保留记录并刷新检查未结束事务。\n\(diagnostics.prefix(1000))") }
+        guard let value = result else { throw failure(L10n.text("Backend interrupted or dependency unavailable (interpreter {0}, exit {1}). Preserve records and refresh to check for pending transactions.\n{2}", String(python), String(process.terminationStatus), String(diagnostics.prefix(1000)))) }
         return value
     }
     static func failure(_ message: String) -> NSError { NSError(domain: "DisplayPipe", code: 1, userInfo: [NSLocalizedDescriptionKey: message]) }

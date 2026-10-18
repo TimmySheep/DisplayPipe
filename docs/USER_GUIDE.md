@@ -1,10 +1,38 @@
-# DisplayPipe 0.2.1 · 双屏助手
+# DisplayPipe 0.2.3 · User Guide
+
+## Language and the compact home view
+
+Open the app, review the external display names/status, and use **Recover Displays** only when recovery is needed. An already-healthy state is a no-write no-op. **Refresh** / Command-R is manual; there is no polling loop or added runtime/framework.
+
+The native UI defaults to the first preferred system language: Chinese (`zh`, `zh-Hans`, or any `zh-*` variant) uses **Simplified Chinese**; other/unknown languages fall back to **English**. Open **Details → Language** to choose **System / English / 简体中文**. The language choice alone is saved. Switching immediately redraws cached state, labels, actions and controls; it does not collect new display data or run any recovery/undo command. Names, IDs, ports and paths stay unchanged.
+
+Home shows external display rows/counts and concise state/action messages only. Internal-display and lid context appears **only in Details**. A refusal, failure or pending override directs you to Details for the full reason instead of leaking technical paragraphs onto Home. **Undo This Override** remains visible when a pending transaction requires it.
+
+Native buttons, menu items, confirmations, countdowns, display states and dependency-error messages are bilingual. **Raw technical diagnostics (original language)** is deliberately labeled: backend/collector prose may still be Chinese or English and is preserved without translation or filtering, alongside exact IDs/paths. This is not a claim that every diagnostic sentence has been translated. The detailed technical reference below is currently Chinese.
+
+## Recovery and safety
+
+Recovery uses the existing guarded backend: fresh exact-identity backup, audited conservative candidate, at most 20 seconds of stability observations, then verified original-byte reset. Without stable evidence, the countdown attempts verified automatic undo; changed identity, missing service or uncertain readback retains a pending transaction rather than retargeting a display. Do not unplug or quit during a transaction. Check the actual image and OSD yourself; system readings are not physical confirmation.
+
+**Details → No-Internal-Fallback Authorization** explains the internal display/lid risks. Its explicit permission remains **default-off, session-only and not saved**; changing language neither grants permission nor changes the backend gate. Collapse/reopen Details resets this checkbox to off as before. Only the independent language preference persists. The action confirmation still acknowledges private API risk, possible flicker/failure, the deadline and pending-transaction handling.
+
+Python 3.9+ must already exist. Missing-runtime errors are localized and list attempted paths; no runtime is installed and no display is written. Runtime reports/backups stay in `~/Library/Application Support/DisplayPipe/`. Removing the app is not undo. Builds are ad-hoc signed, not Developer ID signed or notarized. This bilingual UI update does not expand hardware support or establish new real-fault recovery acceptance.
+
+---
+
+# 中文使用说明 · DisplayPipe 0.2.3
+
+## 语言与首页
+
+界面默认跟随系统首选语言：`zh`／`zh-Hans`／其它 `zh-*` 变体均使用简体中文，其它或未知语言回退英文。在 **详细信息 → 语言** 选择 **跟随系统／English／简体中文**。只持久保存语言选择，切换即时重绘缓存数据，不重新采集、不执行恢复或撤销；设备名称、标识、端口与路径保持原文。
+
+首页仅保留外接屏行、台数和结构化的简洁状态／操作提示，内屏与机盖文字全部位于详细信息。拒绝、失败与未结束覆盖会提示查看详细信息，完整原因保留在 **原始技术诊断（保留原文）**，此区明确可能仍为后端原始中英文，不声称所有诊断都已翻译。无内屏回退许可仍在详细信息内默认不勾选、仅本次、不保存；切换语言不改变勾选状态，收起后重开仍回到默认关闭。后端协议、身份校验、倒计时与其它安全门槛均未改变。
 
 ## 日常使用（不需要终端）
 
 1. 将 MacBook Pro 放回支架，**打开机盖，让内屏在线**。接回 P275 的内置 HDMI 和华为的 USB-C→DP 两根线。
 2. 打开 `~/Applications/DisplayPipe.app`（蓝紫双显示器、绿色连接图标）。App 启动只读检查；不自启、不后台监控、不自行应用覆盖。
-3. 紧凑主界面按**实际枚举到的外接显示器数量**逐行显示真实名称（优先显示器自己的 EDID 描述符 0xFC 名称，其次 CoreGraphics 名称，再退回 vendor:model）、在线状态与系统报告刷新率，下方一行给出内屏状态与外接台数，以及一个 **恢复双屏** 主按钮。名字读不出来时明确写“名称不可读／未命名外接服务”，不会用固定产品名代替。**… · 无需恢复** 时不用操作；主按钮即使点击，也会重新检查后直接返回，不调用 setter。右上角“刷新”或 Command-R 可手动更新，没有自动刷新。
+3. 紧凑主界面按**实际枚举到的外接显示器数量**逐行显示真实名称（优先显示器自己的 EDID 描述符 0xFC 名称，其次 CoreGraphics 名称，再退回 vendor:model）、在线状态与系统报告刷新率，下方一行给出外接台数，以及一个 **恢复双屏** 主按钮。名字读不出来时明确写“名称不可读／未命名外接服务”，不会用固定产品名代替。**无需恢复** 时不用操作；主按钮即使点击，也会重新检查后直接返回，不调用 setter。右上角“刷新”或 Command-R 可手动更新，没有自动刷新。
 4. 若显示“发现可恢复的连接故障”，点击 **恢复双屏**，阅读风险说明并确认一次（两个接入方向都可用且对称）。之后自动完成新备份 → 基于**该显示器自己的 EDID** 生成临时候选 → 最长20秒倒计时观察；一旦连续取得稳定双屏证据就立即核验撤销，**如果到点仍无稳定证据就自动执行可核验的撤销**，不需要你点击。忙碌时显示进度指示并禁用重复操作。请不要插拔、合盖、切换 OSD 或退出。
 
    接入顺序只是说明行：本机跑完过一次可核验的恢复+撤销的组合会标注 **接入顺序（本机已验证）**；没有这类记录的组合标中性提示 **首次使用该组合**。两者都只是提示，不阻止写入，也不代表“每次都可靠”。

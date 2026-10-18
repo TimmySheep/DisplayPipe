@@ -6,17 +6,24 @@ import Foundation
   print("PASS: " + message)
  }
  static func main() {
+        L10n.preferences = TestLanguagePreferences()
+
+  let unsafe = "内屏 internal display; 机盖 open lid closed lid"
+  for state in ["already-healthy", "ready", "refused", "dry-run", "applying", "polling", "auto-reverting", "auto-reverted-verified", "auto-reverted-cg-not-restored", "resetting", "cg-restored-reset-verified", "physical-accepted", "undo-verified", "recovery-needed", "unsupported", "reset-verified-cg-not-restored", "failure"] {
+   let view = RecoveryPresentation(["state": state, "summary": unsafe, "error": unsafe, "pending": [["error": unsafe]], "analysis": ["requiresNoInternalFallback": true]], displays: unsafe)
+   check(!["内屏", "机盖", "internal", "lid"].contains { (view.title + view.detail).lowercased().contains($0) }, "home excludes technical fallback/lid copy for \(state)")
+  }
   let healthy = RecoveryPresentation(["state": "already-healthy"])
   check(healthy.title.contains("无需恢复") && !healthy.canUndo && healthy.canRecover, "healthy is a no-op, not a successful repair")
   check(healthy.title == "无需恢复" && healthy.detail.isEmpty, "healthy view is one calm line without repeated safety exposition")
   let healthyWithDisplays = RecoveryPresentation(["state": "already-healthy"], displays: "外接显示器 2 台 · 系统在线 2 · 内屏：在线（3456×2234）")
-  check(healthyWithDisplays.title.hasPrefix("外接显示器 2 台") && healthyWithDisplays.title.contains("无需恢复"), "healthy line is labelled with the live display counts")
+  check(healthyWithDisplays.title == "无需恢复", "healthy line never interpolates raw hardware summaries")
 
   let pending = RecoveryPresentation(["state": "recovery-needed"])
   check(pending.canUndo && !pending.canRecover && pending.title.contains("需要处理"), "pending must block another recovery and expose undo")
   check(pending.detail.contains("自动撤销未能核验完成"), "pending copy explains that the automatic revert could not be verified")
   let restarted = RecoveryPresentation(["state": "recovery-needed", "pending": [["error": "目标已重连，身份变化"]]])
-  check(restarted.detail.contains("身份变化") && restarted.canUndo, "restart retains the pending reason without hiding the undo action")
+  check(restarted.technicalDetail.contains("身份变化") && restarted.canUndo, "restart retains the pending reason in technical details without hiding undo")
 
   let restored = RecoveryPresentation(["state": "cg-restored-reset-verified"])
   check(restored.canAcceptPhysical && restored.detail.contains("实体") && !restored.physicalAccepted, "CG recovery must not imply physical acceptance")
@@ -45,9 +52,9 @@ import Foundation
   check(!verified.detail.contains("首次使用该组合") && !verified.detail.contains("实验性") && !verified.detail.contains("未验证"),
         "an already verified order carries no first-use, unverified or experimental wording")
   let refused = RecoveryPresentation(["state": "refused", "error": "对端外屏不属于当前支持的 EDID 类别（未识别能力：CTA vendor 0x0102）：拒绝写入。"])
-  check(!refused.canRecover && refused.title.contains("拒绝写入") && refused.detail.contains("CTA vendor"), "a refusal names the failing gate and blocks recovery")
+  check(!refused.canRecover && refused.title.contains("拒绝写入") && refused.technicalDetail.contains("CTA vendor"), "a refusal retains the failing gate in technical details and blocks recovery")
   let unsupported = RecoveryPresentation(["state": "unsupported", "error": "未找到另一台外接显示器缺失/无 Pipe 的证据"])
-  check(!unsupported.canRecover && unsupported.detail.contains("另一台外接显示器"), "unsupported explains a shape that is not a recovery target")
+  check(!unsupported.canRecover && unsupported.technicalDetail.contains("另一台外接显示器"), "unsupported retains the exact reason in technical details")
 
   // Countdown: the automatic revert is the safety net and needs no click.
   let polling = RecoveryPresentation(["progress": "polling", "remainingSeconds": 18, "countdownSeconds": 20, "stableSamples": 1])
@@ -64,7 +71,7 @@ import Foundation
                                                                        "requiresNoInternalFallback": true, "countdownSeconds": 20,
                                                                        "target": ["name": "PANEL A", "port": "DCPEXT0"]]])
   check(noFallback.requiresNoInternalFallback, "an offline internal display is reported as requiring the explicit no-fallback opt-in")
-  check(noFallback.detail.contains("允许无内屏回退写入"), "the no-fallback situation is explained in the state line")
+  check(noFallback.technicalDetail.contains("允许无内屏回退写入"), "the no-fallback situation is explained exclusively in technical details")
 
   let args = RecoveryClient.arguments(resources: URL(fileURLWithPath: "/copied app/Contents/Resources"), command: ["recover"])
   check(args == ["-B", "/copied app/Contents/Resources/backend/recovery.py", "recover"] && !args.contains("--execute"), "copied bundle paths and no-write default")
@@ -102,4 +109,8 @@ import Foundation
   }
   print("PASS: recovery UI + interpreter resolution checks complete")
  }
+}
+
+private final class TestLanguagePreferences: UserDefaults {
+    override func string(forKey key: String) -> String? { key == L10n.preferenceKey ? LanguageChoice.simplifiedChinese.rawValue : nil }
 }

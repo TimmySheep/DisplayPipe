@@ -2,6 +2,8 @@ import AppKit
 
 @main struct CompactUITests {
     static func main() throws {
+        L10n.preferences = TestLanguagePreferences()
+
         _ = NSApplication.shared
         let delegate = AppDelegate(collect: { _ in fatalError("layout tests must not collect live displays") })
         delegate.buildWindow()
@@ -29,7 +31,7 @@ import AppKit
         delegate.presentRecovery(["state": "already-healthy"])
         check(texts().filter { $0 == "在线 · 120 Hz" }.count == 2, "one concise online/Hz row per discovered external")
         check(texts().contains("PANEL A") && texts().contains("PANEL B"), "rows show the real display names")
-        check(texts().joined().contains("外接显示器 2 台") && texts().joined().contains("内屏：未在线"), "compact view reports external count and internal state")
+        check(texts().joined().contains("外接显示器 2 台") && !texts().joined().contains("内屏"), "compact view reports only external count")
         check(texts().joined().contains("无需恢复"), "healthy state stays one calm line")
         check(button("撤销本次覆盖").isHidden && button("恢复双屏").isEnabled, "healthy state hides undo and keeps the guarded no-op action")
 
@@ -64,7 +66,7 @@ import AppKit
                                                "combinationDescription": "目标：PANEL A（端口 DCPEXT1，双 Pipe）",
                                                "countdownSeconds": 20, "internalOnline": false, "requiresNoInternalFallback": true,
                                                "target": ["name": "PANEL A", "port": "DCPEXT1"]]])
-        check(texts().joined().contains("PANEL A") && texts().joined().contains("首次使用该组合"), "a first-use cable order carries the neutral label without blocking recovery")
+        check(texts().joined().contains("首次使用该组合"), "a first-use cable order carries the neutral label without blocking recovery")
         check(button("恢复双屏").isEnabled, "a first-use cable order stays recoverable with the normal confirmation")
         check(!texts().joined().contains("未验证") && !texts().joined().contains("实验性"), "no unverified or experimental wording reaches the interface")
         delegate.presentRecovery(["state": "ready", "summary": "外接端口 2 个 · 目标：PANEL B（端口 DCPEXT1，双 Pipe）",
@@ -74,12 +76,12 @@ import AppKit
         check(texts().joined().contains("接入顺序（本机已验证）"), "a recorded verified order shows the plain calm label")
         check(!texts().joined().contains("首次使用该组合"), "a recorded verified order is not labelled as a first use")
         delegate.presentRecovery(["state": "refused", "error": "占用双 Pipe 的目标 EDID 当前不可读（missing-data）：拒绝写入。"])
-        check(!button("恢复双屏").isEnabled && texts().joined().contains("不可读"), "a refusal names the failing gate instead of pretending support")
+        check(!button("恢复双屏").isEnabled && texts().joined().contains("详细信息"), "a refusal directs to Details and blocks recovery")
         delegate.presentRecovery(["state": "recovery-needed", "error": "目标身份变化，已停止写入。"])
         check(!button("撤销本次覆盖").isHidden && button("撤销本次覆盖").isEnabled && !button("恢复双屏").isEnabled, "pending overlay prominently exposes only owned undo; recovery blocked")
-        check(texts().joined().contains("机盖") && texts().joined().contains("身份变化"), "pending state retains concise action and failure reason")
+        check(!texts().joined().contains("机盖") && texts().joined().contains("详细信息"), "pending state keeps lid-free action and directs to Details")
         delegate.presentRecovery(["state": "unsupported", "error": "未找到另一台外接显示器缺失/无 Pipe 的证据"])
-        check(!button("恢复双屏").isEnabled && button("撤销本次覆盖").isHidden && texts().contains("未找到另一台外接显示器缺失/无 Pipe 的证据"), "unsupported state explains the fail-closed reason")
+        check(!button("恢复双屏").isEnabled && button("撤销本次覆盖").isHidden && texts().joined().contains("详细信息"), "unsupported state directs to the full fail-closed reason in Details")
         delegate.presentRecovery(["state": "cg-restored-reset-verified"])
         button("详细信息").performClick(nil)
         check(!button("确认实体双屏与 OSD").isHidden && button("确认实体双屏与 OSD").isEnabled, "physical confirmation remains available inside details after system recovery")
@@ -92,4 +94,8 @@ import AppKit
         print("UI_INTROSPECTION", String(data: try JSONSerialization.data(withJSONObject: ["contentWidth": size().width, "contentHeight": size().height, "visibleButtons": buttons().filter(visible).map(\.title), "visibleLabels": texts(), "testOnly": true], options: [.sortedKeys]), encoding: .utf8)!)
         print("PASS: 32 AppKit hierarchy checks (not screenshot or live GUI interaction acceptance)")
     }
+}
+
+private final class TestLanguagePreferences: UserDefaults {
+    override func string(forKey key: String) -> String? { key == L10n.preferenceKey ? LanguageChoice.simplifiedChinese.rawValue : nil }
 }

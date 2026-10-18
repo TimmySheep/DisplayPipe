@@ -6,6 +6,7 @@ import Foundation
 struct RecoveryPresentation {
     let title: String
     let detail: String
+    let technicalDetail: String
     let canRecover: Bool
     let canUndo: Bool
     let canAcceptPhysical: Bool
@@ -23,7 +24,7 @@ struct RecoveryPresentation {
         let analysis = object["analysis"] as? [String: Any] ?? [:]
         let target = analysis["target"] as? [String: Any] ?? [:]
         orderVerified = (analysis["orderVerified"] as? Bool) ?? (object["orderVerified"] as? Bool) ?? false
-        orderLabel = analysis["orderLabel"] as? String ?? object["orderLabel"] as? String ?? ""
+        orderLabel = (analysis["orderLabel"] ?? object["orderLabel"]) == nil ? "" : (orderVerified ? L10n.text("Connection order (verified on this Mac)") : L10n.text("First use of this combination"))
         combinationDescription = analysis["combinationDescription"] as? String ?? object["combinationDescription"] as? String ?? ""
         requiresNoInternalFallback = (analysis["requiresNoInternalFallback"] as? Bool) ?? false
         countdownSeconds = (analysis["countdownSeconds"] as? Int) ?? (object["countdownSeconds"] as? Int) ?? 20
@@ -40,63 +41,44 @@ struct RecoveryPresentation {
         let error = (object["error"] as? String).flatMap { $0.isEmpty ? nil : $0 }
             ?? (state == "ready" && !summary.isEmpty ? summary : nil)
             ?? pending.first?["error"] as? String ?? ""
+        technicalDetail = [summary, error, requiresNoInternalFallback ? L10n.text("The internal display is offline: explicitly select the no-internal-fallback permission in Details. Opening the lid may change service identity. Unverifiable countdown undo retains a pending transaction.") : ""].filter { !$0.isEmpty }.joined(separator: "\n")
         switch state {
         case "already-healthy":
-            title = displays.isEmpty ? "无需恢复" : displays + " · 无需恢复"
-            detail = ""
+            title = L10n.text("No recovery needed"); detail = ""
         case "ready":
-            title = "发现可恢复的连接故障"
-            detail = (summary.isEmpty ? "" : summary + "\n")
-                + (orderLabel.isEmpty ? "" : orderLabel + "。\n")
-                + (requiresNoInternalFallback ? "内屏未在线：写入需要在详细信息中主动选择“允许无内屏回退写入”。\n" : "")
-                + "倒计时到点未取得稳定证据时会自动撤销临时覆盖。"
+            title = L10n.text("Recoverable connection fault detected")
+            detail = (orderLabel.isEmpty ? "" : orderLabel + "\n") + L10n.text("The countdown automatically attempts undo if no stable evidence arrives. Review Details before recovering.")
         case "refused":
-            title = "已识别故障 · 当前拒绝写入"
-            detail = error.isEmpty ? "请展开详细信息，查看具体拒绝原因。" : error
+            title = L10n.text("Fault detected · Write refused"); detail = L10n.text("See Details for the exact refusal reason.")
         case "dry-run":
-            title = "方案已检查 · 未写入显示"
-            detail = "已按本次实时身份保存备份与候选；真正恢复时会重新检查。"
+            title = L10n.text("Plan checked · No display writes"); detail = L10n.text("Backup and candidate saved for the current identity. Recovery checks again before applying.")
         case "applying":
-            title = "正在应用临时候选…"
-            detail = (targetName.isEmpty ? "正在写入本次选中的单一外接服务。" : "正在写入本次选中的单一外接服务：\(targetName)（\(targetPort)）。")
-                + "请勿拔线、合盖或退出。"
+            title = L10n.text("Applying temporary candidate…"); detail = L10n.text("Do not unplug or quit.")
         case "polling":
-            title = Presentation.countdown(remaining: object["remainingSeconds"] as? Int,
-                                           total: object["countdownSeconds"] as? Int ?? countdownSeconds)
-            detail = "到点未取得稳定双屏证据会自动撤销临时覆盖并核验原件，不需要你点击。请勿拔线、合盖或退出。"
+            title = Presentation.countdown(remaining: object["remainingSeconds"] as? Int, total: object["countdownSeconds"] as? Int ?? countdownSeconds)
+            detail = L10n.text("At the deadline, undo is attempted and original bytes verified automatically; no click is needed. Do not unplug or quit.")
         case "auto-reverting":
-            title = "倒计时结束 · 正在自动撤销临时覆盖…"
-            detail = "正在按本次运行记录核验原件字节；请勿操作。目标消失或身份变化时会保留未结束事务并停止写入。"
+            title = L10n.text("Countdown ended · Automatically undoing…"); detail = L10n.text("Verifying original bytes. Uncertain identity or readback retains a pending transaction. Please wait.")
         case "auto-reverted-verified":
-            title = "已自动撤销临时覆盖 · 原件已核验"
-            detail = "系统读数已回到双屏且原件字节一致；请检查实体画面与 OSD。"
+            title = L10n.text("Automatically undone · Original verified"); detail = L10n.text("System readings show both displays and original bytes match. Check the physical image and OSD.")
         case "auto-reverted-cg-not-restored":
-            title = "已自动撤销临时覆盖 · 双屏未恢复"
-            detail = error.isEmpty ? "原件字节已核验；系统仍未给出稳定双屏证据。可再次尝试或查看记录。" : error
+            title = L10n.text("Automatically undone · Displays not restored"); detail = L10n.text("No stable dual-display evidence. See Details.")
         case "resetting":
-            title = "双屏已上线 · 正在撤销覆盖…"
-            detail = "正在核验原始数据，请稍候。"
+            title = L10n.text("Both displays online · Undoing override…"); detail = L10n.text("Verifying original data. Please wait.")
         case "cg-restored-reset-verified":
-            title = "系统双屏已恢复 · 覆盖已撤销"
-            detail = "请检查实体画面及 OSD；可在详细信息中记录确认。"
+            title = L10n.text("System displays restored · Override removed"); detail = L10n.text("Check the physical image and OSD; record confirmation in Details.")
         case "physical-accepted":
-            title = "已记录实体双屏确认"
-            detail = ""
+            title = L10n.text("Physical display confirmation recorded"); detail = ""
         case "undo-verified":
-            title = "覆盖已撤销 · 原件已核验"
-            detail = "请检查画面；撤销不代表连接故障已解决。"
+            title = L10n.text("Override removed · Original verified"); detail = L10n.text("Check the image. Undo does not mean the connection fault was fixed.")
         case "recovery-needed":
-            title = "需要处理 · 有未结束覆盖"
-            detail = "自动撤销未能核验完成，未结束事务已保留。请保持机盖开启，使用“撤销本次覆盖”。" + (error.isEmpty ? "" : "\n" + error)
+            title = L10n.text("Action required · Pending override"); detail = L10n.text("Automatic undo could not be verified. Use Undo This Override and see Details.")
         case "unsupported":
-            title = "当前连接不支持自动恢复"
-            detail = error.isEmpty ? "请展开详细信息，查看支持范围。" : error
+            title = L10n.text("Automatic recovery unavailable"); detail = L10n.text("See Details for the supported scope and exact reason.")
         case "reset-verified-cg-not-restored":
-            title = "覆盖已撤销 · 双屏未保持"
-            detail = "已停止自动操作，请查看记录。"
+            title = L10n.text("Override removed · Displays did not stay online"); detail = L10n.text("Automatic operations stopped. See Details.")
         default:
-            title = "无法完成检查或操作"
-            detail = error.isEmpty ? "请查看详细信息和记录，暂勿重复恢复。" : error
+            title = L10n.text("Unable to complete check or operation"); detail = L10n.text("See Details and records before retrying recovery.")
         }
     }
 }

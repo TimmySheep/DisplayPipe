@@ -44,7 +44,7 @@ extension Snapshot {
         return mappings.first { $0.name == name }
     }
     static func vendorModel(_ vendor: UInt32?, _ model: UInt32?) -> String {
-        guard let vendor = vendor, let model = model, vendor != 0 || model != 0 else { return "身份未知" }
+        guard let vendor = vendor, let model = model, vendor != 0 || model != 0 else { return L10n.text("Unknown identity") }
         return String(format: "0x%04x:0x%04x", vendor, model)
     }
     static func pipeText(_ pipeIDs: [Int], _ maxPipes: Int?) -> String {
@@ -84,11 +84,11 @@ extension Snapshot {
     private func card(for display: DisplayReading, readings displayReadings: [EDIDReading]) -> DisplayCard {
         let names = Set(displayReadings.compactMap { $0.name })
         let displayName = display.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        var name = "未命名外接显示器"
+        var name = L10n.text("Unnamed external display")
         var source = "none"
         if let edidName = names.count == 1 ? names.first : nil, !edidName.isEmpty {
             name = edidName; source = "edid"
-        } else if !displayName.isEmpty && !displayName.hasPrefix("未知显示器") {
+        } else if !displayName.isEmpty {
             name = displayName; source = "coregraphics"
         } else if display.vendor != 0 || display.model != 0 {
             name = Snapshot.vendorModel(display.vendor, display.model); source = "vendor-model"
@@ -100,12 +100,12 @@ extension Snapshot {
         let state: DisplayState = coreGraphicsFailed ? .unknown : (ambiguous ? .ambiguous : .online)
         var stateText: String
         if coreGraphicsFailed {
-            stateText = "无法确认（枚举失败）"
+            stateText = L10n.text("Unknown (enumeration failed)")
         } else if ambiguous {
-            stateText = "同样身份的设备多于一台，无法确认名称"
+            stateText = L10n.text("Ambiguous identity; name unconfirmed")
         } else {
-            let rate = display.reportedRefreshHz.flatMap { $0.isFinite && $0 > 0 ? String(format: " · %.0f Hz", $0) : nil } ?? " · 刷新率未知"
-            stateText = "在线" + rate
+            let rate = display.reportedRefreshHz.flatMap { $0.isFinite && $0 > 0 ? String(format: " · %.0f Hz", $0) : nil } ?? L10n.text(" · Refresh rate unknown")
+            stateText = L10n.text("Online") + rate
         }
         let port = mapping?.role
         let title = state == .online ? name : name + (port.map { "（\($0)）" } ?? "")
@@ -122,15 +122,15 @@ extension Snapshot {
 
     private func serviceCard(for reading: EDIDReading) -> DisplayCard {
         let broken = !reading.valid || reading.byteCount < 128
-        let name = reading.name ?? (broken ? "未命名外接服务" : Snapshot.vendorModel(reading.vendorNumber, reading.modelNumber))
+        let name = reading.name ?? (broken ? L10n.text("Unnamed external service") : Snapshot.vendorModel(reading.vendorNumber, reading.modelNumber))
         let mapping = self.mapping(named: reading.name)
         let port = mapping?.role
         let state: DisplayState = coreGraphicsFailed ? .unknown : (broken ? .unreadable : .offline)
         let stateText: String
-        if coreGraphicsFailed { stateText = "无法确认（枚举失败）" }
-        else if broken { stateText = "已连接但 EDID 不可读（可能无信号）" }
-        else if reading.named { stateText = "已连接 · 系统未上线（无信号 / 无 Pipe）" }
-        else { stateText = "已连接 · 系统未上线（名称不可读）" }
+        if coreGraphicsFailed { stateText = L10n.text("Unknown (enumeration failed)") }
+        else if broken { stateText = L10n.text("Connected · EDID unreadable (possibly no signal)") }
+        else if reading.named { stateText = L10n.text("Connected · Offline (no signal / no Pipe)") }
+        else { stateText = L10n.text("Connected · Offline (name unreadable)") }
         var lines = ["状态：\(stateText)"]
         if let mapping = mapping { lines.append("端口 \(mapping.role) · " + Snapshot.pipeText(mapping.pipeIDs, mapping.maxPipes)) }
         lines.append("EDID service=\(reading.serviceID) · \(reading.byteCount) 字节 · 长度/校验：\(reading.valid ? "通过" : "不通过")")
@@ -183,24 +183,24 @@ extension Snapshot {
 
 enum Presentation {
     static func dimensions(_ width: Int?, _ height: Int?) -> String {
-        guard let w = width, let h = height, w > 0, h > 0 else { return "未知" }
+        guard let w = width, let h = height, w > 0, h > 0 else { return L10n.text("Unknown") }
         return "\(w)×\(h)"
     }
     static func refreshRate(_ value: Double?) -> String {
-        guard let value = value else { return "未知" }
-        return value > 0 && value.isFinite ? String(format: "%.2f Hz", value) : "未知 / 可变（API 未给出固定值）"
+        guard let value = value else { return L10n.text("Unknown") }
+        return value > 0 && value.isFinite ? String(format: "%.2f Hz", value) : L10n.text("Unknown / variable (no fixed API value)")
     }
     static func beijingTime(_ value: String) -> String {
-        guard let date = ISO8601DateFormatter().date(from: value) else { return "时间未知（\(value)）" }
+        guard let date = ISO8601DateFormatter().date(from: value) else { return L10n.text("Unknown time ({0})", String(value)) }
         let f = DateFormatter()
         f.locale = Locale(identifier: "zh_CN")
         f.timeZone = TimeZone(identifier: "Asia/Shanghai")
         f.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        return f.string(from: date) + " 北京时间 UTC+8"
+        return f.string(from: date) + L10n.text(" Beijing time UTC+8")
     }
     static func countdown(remaining: Int?, total: Int?) -> String {
         let seconds = remaining.map(String.init) ?? "?"
         let limit = total.map(String.init) ?? "?"
-        return "正在等待双屏…还可等待 \(seconds) 秒（共 \(limit) 秒）；到点将自动撤销临时覆盖"
+        return L10n.text("Waiting for displays… {0}s remaining (of {1}s); automatic undo at deadline", String(seconds), String(limit))
     }
 }
