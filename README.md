@@ -262,6 +262,6 @@ Python **没有内置**。打包时解析现有 `/usr/bin/python3` 的真实可�
 
 源码结构见英文第九节。EDID 处理复用 MIT 项目 [pipecap](https://github.com/a1678991/pipecap) 固定提交 `d045192de888188783b4da74b10ab05f4229c868`，保留原许可与打包声明，不含 BetterDisplay 实现或授权绕过。
 
-**公开源码不自动等于授予开源许可。** 原创 DisplayPipe 代码暂未指定项目级许可证，保留相应权利；明确标识的上游 MIT 组件仍按其自带许可证使用。
+**许可证：原创 DisplayPipe 代码采用 MIT 许可证**，见 [`LICENSE`](LICENSE)，版权归 2026 TimmySheep。复用的上游组件继续沿用各自自带的 MIT 声明，源码树与打包产物中均保留。Apple 私有接口与第三方商标不在本项目授权范围内。
 
 公开仓库从审核后的源码快照开始，不包含私人开发历史、内部 Agent 指令、原始本机 EDID、事务备份或机器维护日志。当前仍是特定硬件的用户态 workaround，不是对 macOS 根因的系统补丁。
