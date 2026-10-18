@@ -45,9 +45,9 @@ struct RecoveryPresentation {
             title = displays.isEmpty ? "无需恢复" : displays + " · 无需恢复"
             detail = ""
         case "ready":
-            title = orderVerified ? "发现可恢复的连接故障" : "发现可恢复的连接故障 · 未验证的接入顺序"
+            title = "发现可恢复的连接故障"
             detail = (summary.isEmpty ? "" : summary + "\n")
-                + (orderLabel.isEmpty ? "" : "接入顺序：\(orderLabel)。\n")
+                + (orderLabel.isEmpty ? "" : orderLabel + "。\n")
                 + (requiresNoInternalFallback ? "内屏未在线：写入需要在详细信息中主动选择“允许无内屏回退写入”。\n" : "")
                 + "倒计时到点未取得稳定证据时会自动撤销临时覆盖。"
         case "refused":

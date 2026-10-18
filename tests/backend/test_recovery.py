@@ -219,14 +219,16 @@ class SymmetricOrders(Harness):
         self.assertEqual(reverse[0].inspect(fixtures.fault_inventory(order='reverse'))['target']['port'], 'DCPEXT0')
         first = forward[0].inspect(fixtures.fault_inventory())
         self.assertFalse(first['orderVerified'])
-        self.assertIn('尚未验证', first['orderLabel'])
-        forward[0].record(first['combinationToken'], 'recovery-verified', self.root, first['combination'])
+        self.assertEqual(first['orderLabel'], r.ORDER_FIRST_USE_LABEL)
+        # Only a completed, self-verified run of this order labels it verified on this machine.
+        self.assertEqual(forward[0].run(True, True)['state'], 'cg-restored-reset-verified')
         later = forward[0].inspect(fixtures.fault_inventory())
         self.assertTrue(later['orderVerified'])
-        self.assertIn('验证过', later['orderLabel'])
-        # The other order stays labelled unverified; the label never blocks a write.
+        self.assertEqual(later['orderLabel'], r.ORDER_VERIFIED_LABEL)
+        # The other order keeps its own neutral label; neither label blocks a write.
         other = reverse[0].inspect(fixtures.fault_inventory(order='reverse'))
         self.assertFalse(other['orderVerified'])
+        self.assertEqual(other['orderLabel'], r.ORDER_FIRST_USE_LABEL)
         self.assertNotEqual(other['combinationToken'], first['combinationToken'])
 
     def test_candidate_is_generated_from_the_targets_own_edid_in_both_orders(self):
@@ -245,8 +247,111 @@ class SymmetricOrders(Harness):
                 self.assertNotEqual(candidate, own)
                 self.assertEqual(candidate[8:18], own[8:18])
                 self.assertEqual(dp.candidate(own, 120)['bytes'], candidate)
-                self.assertIn(manifest['orderLabel'], ('已在本机验证过的接入顺序',
-                                                       '本机尚未验证的接入顺序（实验性；写入依赖倒计时自动撤销）'))
+                self.assertIn(manifest['orderLabel'], (r.ORDER_VERIFIED_LABEL, r.ORDER_FIRST_USE_LABEL))
+
+
+class OrderVerification(Harness):
+    """The order label comes from the run records; the optional acceptance click is not required."""
+
+    def test_a_completed_run_labels_the_order_verified_without_any_click(self):
+        engine, _, _ = self.engine(fixtures.fault_inventory())
+        before = engine.inspect(fixtures.fault_inventory())
+        self.assertFalse(before['orderVerified'])
+        self.assertEqual(before['orderLabel'], r.ORDER_FIRST_USE_LABEL)
+        self.assertFalse(before['orderVerifiedBy'])
+        out = engine.run(True, True)
+        self.assertEqual(out['state'], 'cg-restored-reset-verified')
+        self.assertFalse(out['physicalInputConfirmed'], 'the optional acceptance click was never pressed')
+        after = engine.inspect(fixtures.fault_inventory())
+        self.assertTrue(after['orderVerified'])
+        self.assertEqual(after['orderLabel'], r.ORDER_VERIFIED_LABEL)
+        self.assertEqual(after['orderVerifiedBy'], 'cg-restored-reset-verified')
+        self.assertEqual(after['orderVerifiedByRun'], out['runDirectory'])
+
+    def test_an_auto_reverted_verified_run_also_labels_the_order(self):
+        def observe(current, reads):
+            for display in current['online']:
+                if not display.get('builtin'):
+                    display['refreshHz'] = 60.0 if reads <= 24 else 120.0
+        engine, _, _ = self.engine(fixtures.fault_inventory(), observe=observe)
+        self.assertEqual(engine.run(True, True)['state'], 'auto-reverted-verified')
+        value = engine.inspect(fixtures.fault_inventory())
+        self.assertTrue(value['orderVerified'])
+        self.assertEqual(value['orderLabel'], r.ORDER_VERIFIED_LABEL)
+        self.assertEqual(value['orderVerifiedBy'], 'auto-reverted-verified')
+
+    def test_the_other_order_and_an_unrecorded_combination_keep_the_neutral_label(self):
+        engine, _, _ = self.engine(fixtures.fault_inventory())
+        self.assertEqual(engine.run(True, True)['state'], 'cg-restored-reset-verified')
+        other = r.Engine(self.root, lambda: copy.deepcopy(fixtures.fault_inventory(order='reverse')))
+        value = other.inspect(fixtures.fault_inventory(order='reverse'))
+        self.assertEqual(value['target']['port'], 'DCPEXT0')
+        self.assertFalse(value['orderVerified'], 'the other cable order has no recorded success yet')
+        self.assertEqual(value['orderLabel'], r.ORDER_FIRST_USE_LABEL)
+        self.assertNotEqual(self.token('standard'), self.token('reverse'))
+        self.assertEqual(r.Engine(self.root, lambda: copy.deepcopy(fixtures.fault_inventory())).inspect(
+            fixtures.fault_inventory())['orderLabel'], r.ORDER_VERIFIED_LABEL)
+
+    def test_plans_refusals_and_pending_overrides_never_label_the_order(self):
+        engine, _, _ = self.engine(fixtures.fault_inventory())
+        self.assertEqual(engine.run()['state'], 'dry-run')
+        self.assertFalse(engine.inspect(fixtures.fault_inventory())['orderVerified'],
+                         'a plan is not a verification')
+        healthy = self.engine(fixtures.healthy_inventory())[0]
+        self.assertEqual(healthy.status()['state'], 'already-healthy')
+        self.assertFalse(healthy.status()['analysis']['orderVerified'])
+        # A pending override is created last: status() reports it for the whole state root.
+        failed, _, _ = self.engine(fixtures.fault_inventory(), apply_outcome='timeout', reset_outcome='fail')
+        self.assertEqual(failed.run(True, True)['state'], 'recovery-needed')
+        self.assertFalse(failed.inspect(fixtures.fault_inventory())['orderVerified'],
+                         'a pending override is not a verification')
+
+    def test_the_physical_acceptance_stays_a_separate_independent_record(self):
+        engine, _, _ = self.engine(fixtures.fault_inventory())
+        self.assertEqual(engine.run(True, True)['state'], 'cg-restored-reset-verified')
+        token = engine.inspect(fixtures.fault_inventory())['combinationToken']
+        self.assertTrue(engine.inspect(fixtures.fault_inventory())['orderVerified'],
+                        'the run record alone already labels the order verified')
+        self.assertNotEqual(engine.pattern_stage(token), 'physical-accepted',
+                            'the acceptance journal has no physical-acceptance entry yet')
+        self.assertTrue(engine.accept(True)['physicalInputConfirmed'])
+        self.assertEqual(engine.pattern_stage(token), 'physical-accepted')
+        self.assertTrue(engine.inspect(fixtures.fault_inventory())['orderVerified'],
+                        'appending the acceptance event must not erase the verification')
+
+
+class OrderWording(Harness):
+    """The old 'unverified / experimental order' copy must be gone from the app and the docs."""
+    BANNED = ('未验证', '实验性', 'unverified', 'Unverified', 'experimental', 'Experimental')
+    UI_SOURCES = ('backend/recovery.py', 'GUI/RecoveryPresentation.swift', 'GUI/App.swift', 'GUI/Diagnostics.swift',
+                  'GUI/DiagnosticCore.swift', 'GUI/Presentation.swift', 'GUI/RecoveryClient.swift')
+    PRODUCT_DOCS = ('README.md', 'docs/USER_GUIDE.md', 'docs/SAFETY.md')
+    OLD_CLAIMS = ('unverified order', 'unverified/experimental', '尚未验证的接入顺序', '未验证的接入顺序',
+                  'remains unverified', 'reverse-order recovery', '反向顺序仍未验收')
+
+    def test_no_unverified_or_experimental_wording_in_ui_text_or_docs(self):
+        for relative in self.UI_SOURCES + self.PRODUCT_DOCS:
+            path = ROOT / relative
+            if not path.exists():
+                continue                                  # the publication snapshot ships a subset
+            text = path.read_text()
+            for banned in self.BANNED:
+                self.assertNotIn(banned, text, '%s still emits %r' % (relative, banned))
+
+    def test_the_old_order_claims_are_deleted_not_reworded(self):
+        for relative in self.PRODUCT_DOCS:
+            path = ROOT / relative
+            if not path.exists():
+                continue
+            text = path.read_text()
+            for claim in self.OLD_CLAIMS:
+                self.assertNotIn(claim, text, '%s still claims %r' % (relative, claim))
+
+    def test_the_labels_are_the_plain_neutral_ones(self):
+        source = (ROOT / 'backend/recovery.py').read_text()
+        self.assertIn('接入顺序（本机已验证）', source)
+        self.assertIn('首次使用该组合', source)
+        self.assertNotIn('ack-unverified-combination', source)
 
 
 class Countdown(Harness):
@@ -520,7 +625,7 @@ class Cli(Harness):
         self.assertEqual(value['state'], 'dry-run')
         self.assertEqual(value['targetPort'], 'DCPEXT0')
         self.assertFalse(value['orderVerified'])
-        self.assertIn('尚未验证', value['orderLabel'])
+        self.assertEqual(value['orderLabel'], r.ORDER_FIRST_USE_LABEL)
         self.assertFalse(value['setterCalled'])
         self.assertNotIn('ack-unverified-combination', (ROOT / 'backend/recovery.py').read_text(),
                          'no duplicate gate for the other cable order')

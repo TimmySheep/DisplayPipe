@@ -20,7 +20,7 @@ import Foundation
         let rows = try DiagnosticCore.mappings(data)
         check(rows.count == 1 && rows.first?.pipeIDs == [1, 0] && rows.first?.maxPipes == 2 && rows.first?.name == "PANEL-A",
               "nested ConnectionMapping preserves PipeIDs separately from MaxPipes")
-        check(DiagnosticCore.status(rows) == "检测到多 Pipe 分配；恢复尚未验证"
+        check(DiagnosticCore.status(rows) == "检测到多 Pipe 分配；可能是可恢复的连接故障"
               && DiagnosticCore.status([]) == "未读取到 Pipe 映射；不能判断链路"
               && DiagnosticCore.status([PipeMapping(name: "x", role: "r", pipeIDs: [1], maxPipes: 2)]) == "已读取 Pipe 分配；不代表实际输入或恢复成功",
               "status warns for multi-pipe and never infers recovery from capability or missing data")

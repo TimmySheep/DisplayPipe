@@ -4,7 +4,7 @@ A small native macOS utility investigating—and narrowly working around—dual-
 
 **English first · [中文说明](#中文说明)**
 
-> **Experimental, hardware-specific recovery tool.** A controlled command-line experiment restored both physical displays and verified removal of the temporary override. The packaged GUI has not yet passed a real-fault end-to-end recovery test. This is not a universal monitor fix or an Apple-supported API.
+> **Narrowly scoped, hardware-specific recovery tool.** Both connection orders have each completed a verified recovery + reset on the reference machine (a controlled run, with the user confirming that both displays were lit). It remains a user-space workaround for one fault on one Mac model: other monitor models are untested, repeated reconnects / sleep-wake / closed-lid writes have not been formally accepted, and the private Apple interfaces it uses may change between releases. It is not a universal monitor fix and not an Apple-supported API.
 
 ## 1. The problem
 
@@ -69,7 +69,9 @@ One controlled run on **2026-10-18**:
 
 No DP-version switch, replug, reboot, WindowServer restart, or “Detect Displays” operation was performed by the software during this run. Earlier experiments had ambiguous activation and are **not** counted as equivalent successful controlled recoveries.
 
-**Evidence limits:** CoreGraphics online state is not physical bright-screen confirmation. HiDPI render dimensions are not wire timing. This run did not independently re-accept both OSD input timings as 3840×2160 at 120 Hz. Repeated reconnects, sleep/wake, closed-lid recovery, and reverse-order recovery remain unverified.
+A second controlled run on the same day covered the **other connection order** (HUAWEI QSN-CAB connected first). The app recorded it end to end in its own run directory: the run manifest targets port `DCPEXT1` with that run's own original/candidate digests, the native mode-1 apply and the mode-0 reset each returned their own immediate and independently enumerated byte readback, the bounded stability polls were stored, and the final transaction state was `cg-restored-reset-verified` with both external displays online and no pending transaction. The user then confirmed that both displays were lit. **Both cable orders have therefore each completed one verified recovery + reset on the reference machine.**
+
+**Evidence limits:** CoreGraphics online state is not physical bright-screen confirmation. HiDPI render dimensions are not wire timing. Neither run independently re-accepted both OSD input timings as 3840×2160 at 120 Hz. One completed run per order is not a reliability claim: repeated reconnects, sleep/wake, closed-lid writes, and every other monitor model remain untested.
 
 ## 5. Identification and supported scope
 
@@ -79,7 +81,7 @@ Recovery is equally identity-free and symmetric:
 
 - The target is the **online external display that currently occupies two Pipes**, while another external port or service has no link/no Pipe, and the internal display is online (or the explicit no-internal-fallback opt-in is selected).
 - The candidate is generated from **that display's own freshly read EDID** through the unchanged fail-closed audit, and the run records its own original/candidate digests in its own manifest; every later step verifies against that manifest, never against a global constant.
-- Both cable orders are supported. The order is only a label ("verified on this machine" / "unverified order"); it never blocks a write and never weakens a gate.
+- Both cable orders are supported and symmetric. The order is only a label derived from this machine's own run records: once a combination has a completed verified run the app shows `接入顺序（本机已验证）` (“this order, verified on this machine”), and a combination with no such record shows the neutral `首次使用该组合` (“first use of this combination”). The label never blocks a write and never weakens a gate.
 - Unknown or duplicate identities, unsupported EDID capabilities, missing EDID, changed service ID/path, an unreadable target, and uncertain readback stop the operation — and a refusal names the exact failing field instead of claiming support.
 - Backups are per-run and never silently overwritten. Reconnecting changes service identities; an old backup must not be retargeted by monitor name.
 - An already-online pair is a no-write no-op, including a healthy closed-lid session. This does **not** validate recovery while closed-lid.
@@ -92,7 +94,7 @@ The native IOAV helper uses **private Apple interfaces**. They can change or fai
 
 The workflow rechecks the supported fault before applying; then polls for two approximately 120 Hz online displays, each assigned a distinct single Pipe. Before automatic reset, it rechecks stable evidence and exact service identity. Reset must restore the original bytes, and post-reset online state is checked separately.
 
-A pending transaction is persisted before dispatching a write. A timeout no longer waits for a click: the countdown performs the verified automatic revert. Only an unverifiable revert (identity change, missing service, uncertain readback) retains the record and exposes **Undo This Override** instead of writing blindly to another service. The low-level helper is an internal implementation detail; use the guarded app, not direct helper invocations. Do not run the old experimental CLI concurrently.
+A pending transaction is persisted before dispatching a write. A timeout no longer waits for a click: the countdown performs the verified automatic revert. Only an unverifiable revert (identity change, missing service, uncertain readback) retains the record and exposes **Undo This Override** instead of writing blindly to another service. The low-level helper is an internal implementation detail; use the guarded app, not direct helper invocations. Do not run the legacy CLI concurrently.
 
 ## 5b. Runtime dependency and release caveats
 
@@ -144,7 +146,7 @@ DISPLAYPIPE_TEST_APP="$HOME/Applications/DisplayPipe.app" \
   python3 scripts/test-package.py -v
 ```
 
-Recorded checks for 0.2.1: Rust 14; backend Python 39; Swift parser 11, recovery presentation 9, AppKit hierarchy 15; scoped registry equivalence 2; icon 2; packaging 8. These are local test results, **not hosted CI or proof of real-fault GUI recovery**. Native hierarchy tests are not screenshots or actual button-interaction acceptance.
+Recorded checks: Rust 14; backend Python 74; Swift parser 23, recovery presentation 38, AppKit hierarchy 32; scoped registry equivalence 2; icon 2; packaging 8. These are local test results, **not hosted CI**. Native hierarchy tests are not screenshots or actual button-interaction acceptance.
 
 | Measurement | 0.2 | 0.2.1 |
 | --- | ---: | ---: |
@@ -182,7 +184,7 @@ This public repository starts from a reviewed source snapshot. Private developme
 
 DisplayPipe 是一个轻量的原生 macOS 工具，用于调查并针对特定组合绕行 Apple Silicon 双外屏初始化故障。
 
-> **实验性、严格限定硬件的恢复工具。** 已有一次受控命令行实验实现两台实体屏亮起，并验证撤销临时覆盖后继续正常；打包 GUI 仍未通过真实故障下的完整恢复验收。它不是通用显示器修复器，也不是 Apple 支持的公开接口方案。
+> **严格限定硬件的用户态恢复工具。** 参考机上两个接入方向都已各完成一次可核验的恢复+撤销（受控运行，用户确认两台实体屏都有画面）。它仍是针对单一机型、单一故障的用户态 workaround：其它显示器型号未测试，重复重连／睡眠唤醒／闭盖写入尚未正式验收，所用 Apple 私有接口也可能随系统版本变化。它不是通用显示器修复器，也不是 Apple 支持的公开接口方案。
 
 ## 一、为什么做这个工具
 
@@ -216,7 +218,9 @@ DisplayPipe 是一个轻量的原生 macOS 工具，用于调查并针对特定�
 
 软件在本轮没有切 DP、拔插线、重启或调用“检测显示器”。更早受状态变化干扰的实验不冒充为同样的受控成功。
 
-**边界：** CG 在线不等于实体亮屏，HiDPI 渲染尺寸不等于线缆时序。本轮没有再次独立验收双 OSD 的 3840×2160／120 Hz 输入；重复重连、睡眠唤醒、闭盖恢复和反向顺序仍未验收。
+同日第二轮受控运行覆盖**另一接入方向**（华为先接）：App 自己的运行记录端到端保存了本次清单（目标端口 `DCPEXT1`、本次 original／candidate 摘要）、native mode1 应用与 mode0 撤销各自的即时且独立枚举的字节回读、有限轮询样本，最终事务状态为 `cg-restored-reset-verified`、两台外屏在线且无未结束事务；用户随后确认两屏都有画面。**因此两个接入方向各完成一次可核验的恢复+撤销。**
+
+**边界：** CG 在线不等于实体亮屏，HiDPI 渲染尺寸不等于线缆时序。这些运行没有再次独立验收双 OSD 的 3840×2160／120 Hz 输入；每个方向各只有一次成功，不等于“每次都可靠”：重复重连、睡眠唤醒、闭盖写入和其它显示器型号仍未测试。
 
 ## 四、日常操作与严格支持范围
 
@@ -224,7 +228,7 @@ DisplayPipe 是一个轻量的原生 macOS 工具，用于调查并针对特定�
 
 原生 AppKit 首页按**运行时枚举到的外接显示器数量**逐行显示真实名称（EDID 0xFC → CoreGraphics 名称 → vendor:model，读不到就照实写）、在线状态与刷新率，加一行内屏状态和台数、一个主按钮。详细诊断默认折叠、按需创建并释放；有未结束覆盖时才突出撤销入口。无浏览器外壳、启动 Agent、常驻恢复轮询、网络服务或额外 Python 包。
 
-识别与恢复都不写死型号，且两个接入方向对称：目标是**当前占用两个 Pipe 的在线外接显示器**，对端外接端口/服务无链路或无 Pipe，内屏在线（或显式选择无内屏回退）。候选由**该显示器自己的 EDID** 现场生成并把本次 original／candidate 摘要写进本次运行清单，后续全部对清单核验，绝不用全局常量。方向只作为标签（“本机已验证”／“未验证的顺序”），不因此拒绝写入，也不放宽任何门槛。未知／重复设备、EDID 缺失、未知能力、服务 ID／路径变化、目标不可读、读回不确定都会停止，并给出**确切字段**。
+识别与恢复都不写死型号，且两个接入方向对称：目标是**当前占用两个 Pipe 的在线外接显示器**，对端外接端口/服务无链路或无 Pipe，内屏在线（或显式选择无内屏回退）。候选由**该显示器自己的 EDID** 现场生成并把本次 original／candidate 摘要写进本次运行清单，后续全部对清单核验，绝不用全局常量。方向只作为标签：某组合完成过一次可核验运行后标注“接入顺序（本机已验证）”，否则标注中性的“首次使用该组合”，不因此拒绝写入，也不放宽任何门槛。未知／重复设备、EDID 缺失、未知能力、服务 ID／路径变化、目标不可读、读回不确定都会停止，并给出**确切字段**。
 
 倒计时是主要安全网：超时未取得稳定证据就自动执行可核验的 mode0 撤销并报告结果；身份变化／服务消失／回读不确定时拒绝盲目撤销、保留 pending。两台已经在线时直接不写入，包括正常闭盖会话；这不是闭盖恢复验收。不要通过改硬编码指纹、改旧备份或删除 pending 状态来绕过门槛。新增型号需独立审查和 apply／reset 实测。
 
@@ -250,7 +254,7 @@ Python **没有内置**。打包时解析现有 `/usr/bin/python3` 的真实可�
 
 构建中的只读打包测试有部分依赖测试机上已经正常工作的双屏，陌生硬件不保证通过；不要因此删掉安全检查。后续硬件测试失败时，构建产物可能已经存在，要检查完整输出。App 是 ad-hoc 签名，**没有 Developer ID 和公证**，不承诺其他 Mac 的 Gatekeeper 自动放行，不应关闭系统安全保护。
 
-测试命令见英文第八节。0.2.1 记录的本地检查：Rust14、后端 Python39、Swift11＋9＋15、范围查询2、图标2、打包8。不是线上 CI，不代替真实窗口按钮或故障验收。
+测试命令见英文第八节。本轮记录的本地检查：Rust14、后端 Python74、Swift23＋38＋32、范围查询2、图标2、打包8。不是线上 CI，也不代表每次真实窗口按钮交互都已验收。
 
 优化前后应用文件体积约 2.26 MB→1.85 MB（减少18.34%）；相同启动后15／16／17秒采样的空闲 RSS 均值约160 MiB→89 MiB。本轮内存约低44%，不是所有状态的保证，不含临时辅助进程。体积统计是文件逻辑长度，不含保留的旧版／构建／运行记录；不是总磁盘占用。IORegistry 读取范围缩小后，实测约43 MB→3,213字节且保留当前所有 Pipe 映射；图标十种表示均逐像素一致。
 

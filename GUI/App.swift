@@ -228,7 +228,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
             command.append("--ack-no-internal-fallback")
         }
-        guard confirm(recoveryState.orderVerified ? "恢复双屏？" : "未验证的接入顺序 · 确认恢复？", recoverConfirmation(), action: "确认并恢复") else { return }
+        guard confirm("恢复双屏？", recoverConfirmation(), action: "确认并恢复") else { return }
         perform(command)
     }
     @objc private func plan() { perform(["recover"]) }

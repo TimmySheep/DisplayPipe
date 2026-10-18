@@ -75,7 +75,7 @@ enum DiagnosticCore {
     }
     static func status(_ mappings: [PipeMapping]) -> String {
         if mappings.isEmpty { return "未读取到 Pipe 映射；不能判断链路" }
-        if mappings.contains(where: { $0.pipeIDs.count > 1 }) { return "检测到多 Pipe 分配；恢复尚未验证" }
+        if mappings.contains(where: { $0.pipeIDs.count > 1 }) { return "检测到多 Pipe 分配；可能是可恢复的连接故障" }
         return "已读取 Pipe 分配；不代表实际输入或恢复成功"
     }
 }

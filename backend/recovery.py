@@ -27,10 +27,15 @@ STABLE_SAMPLES = 3
 PORT_IN_PATH = re.compile(r'dispext(\d+)')
 PORT_ROLE = re.compile(r'^DCPEXT(\d+)$')
 INTERNAL_PORT = re.compile(r'(?i)edp|internal|panel')
-# A verified apply/revert cycle proves the device combination on this machine. This only
-# labels an order as already verified here; it never gates a write, because both cable
-# orders are treated symmetrically.
-VERIFIED_STAGES = ('revert-verified', 'recovery-verified', 'physical-accepted')
+# A completed, self-verified run proves the device combination on this machine: mode1 applied
+# and mode0 reset both returned an immediate and independently enumerated byte readback, and
+# the run holds no unfinished transaction. This only labels an order as already verified here;
+# it never gates a write, because both cable orders are treated symmetrically. The optional
+# physical-acceptance click is a separate journal entry and is never a prerequisite for the
+# label, so a verified run is visible without any user action after the fact.
+VERIFIED_RUN_STATES = ('cg-restored-reset-verified', 'auto-reverted-verified', 'physical-accepted')
+ORDER_VERIFIED_LABEL = '接入顺序（本机已验证）'
+ORDER_FIRST_USE_LABEL = '首次使用该组合'
 
 NO_FALLBACK_NOTICE = ('内屏未在线，且未取得“无内屏回退”许可。写入后目标外屏将是唯一点亮的屏幕：它会短暂重新初始化/黑屏，'
  '期间看不到进度和“撤销本次覆盖”。倒计时到点会自动尝试撤销临时覆盖；但如果该显示器从注册表中消失、身份或路径变化、'
@@ -282,7 +287,9 @@ class Engine(object):
                 raise ValueError('已有操作进行中；拒绝并发。')
             yield
 
-    # ---- append-only local record of the device combinations this machine verified ----
+    # ---- append-only local journal: verified cycles plus the optional physical acceptance ----
+    # This journal is a second witness only; the order label is derived from the run records
+    # below, so it never depends on the user pressing the physical-acceptance button.
     def patterns(self):
         path = self.root / 'patterns.jsonl'; out = {}
         if path.exists():
@@ -298,9 +305,55 @@ class Engine(object):
     def pattern_stage(self, token):
         return (self.patterns().get(token) or {}).get('stage')
 
-    def verified(self, token):
-        """True when this machine already completed a verified cycle for that order."""
-        return bool(token) and self.pattern_stage(token) in VERIFIED_STAGES
+    # ---- append-only run records: this machine's own verification evidence ----
+    def run_records(self):
+        """token -> completed run, and target port -> completed run, read from the runs.
+
+        The evidence is the run's own manifest plus its last transaction event, so it is
+        derived from the append-only transaction records rather than from any optional click.
+        A run only counts while its last event is a completed verified state and it owns no
+        unfinished transaction; a plan, a refusal or a pending override never counts.
+        """
+        by_token, by_port = {}, {}
+        runs = self.root / 'runs'
+        if not runs.is_dir():
+            return by_token, by_port
+        for run in sorted(runs.iterdir()):
+            events = sorted(run.glob('event-*.json'))
+            if not events:
+                continue
+            try:
+                last = json.loads(events[-1].read_text())
+                manifest = self.manifest(run) or {}
+            except (OSError, ValueError):
+                continue
+            if last.get('pending') or last.get('state') not in VERIFIED_RUN_STATES:
+                continue
+            record = dict(state=last.get('state'), runDirectory=str(run), at=manifest.get('createdAt'),
+                          token=manifest.get('combinationToken') or '', targetPort=manifest.get('targetPort') or '')
+            if record['token']:
+                by_token.setdefault(record['token'], record)
+            if record['targetPort']:
+                by_port.setdefault(record['targetPort'], record)
+        return by_token, by_port
+
+    def verification(self, token, target_port=None):
+        """The completed run that verified this combination on this machine, or None.
+
+        Matching is on the run's own combination token, falling back to the target connector
+        token so a re-enumerated peer address cannot erase a real recorded success. The other
+        cable order has its own target port and therefore keeps its own honest label.
+        """
+        by_token, by_port = self.run_records()
+        if token and token in by_token:
+            return by_token[token]
+        if target_port and target_port in by_port:
+            return by_port[target_port]
+        return None
+
+    def verified(self, token, target_port=None):
+        """True when this machine already completed a verified run for that order."""
+        return self.verification(token, target_port) is not None
 
     def record(self, token, stage, run, combination=None):
         if not token:
@@ -314,9 +367,11 @@ class Engine(object):
     def inspect(self, snap=None):
         """Analysis of one snapshot plus this machine's local verification label."""
         view = analyze(snap if snap is not None else self.inventory())
-        view['orderVerified'] = self.verified(view['combinationToken'])
-        view['orderLabel'] = ('已在本机验证过的接入顺序' if view['orderVerified']
-                              else '本机尚未验证的接入顺序（实验性；写入依赖倒计时自动撤销）')
+        record = self.verification(view['combinationToken'], (view.get('target') or {}).get('port'))
+        view['orderVerified'] = record is not None
+        view['orderLabel'] = ORDER_VERIFIED_LABEL if record else ORDER_FIRST_USE_LABEL
+        view['orderVerifiedBy'] = (record or {}).get('state', '')
+        view['orderVerifiedByRun'] = (record or {}).get('runDirectory', '')
         view['requiresNoInternalFallback'] = view['kind'] == 'ready' and not view['internalOnline']
         view['patternStage'] = self.pattern_stage(view['combinationToken'])
         view['countdownSeconds'] = COUNTDOWN_SECONDS
@@ -441,7 +496,11 @@ class Engine(object):
             if self.pending() or not last or last['state'] != 'cg-restored-reset-verified':
                 raise ValueError('只有已完成原件撤销的系统双屏恢复事务可以记录实体确认。')
             run = pathlib.Path(last['runDirectory'])
-            self.record(last.get('combinationToken', ''), 'physical-accepted', run, (self.manifest(run) or {}).get('combination'))
+            # The acceptance is its own record, keyed to the run's own manifest combination. It
+            # is an extra confirmation only: the order label never waits for it.
+            manifest = self.manifest(run) or {}
+            token = last.get('combinationToken') or manifest.get('combinationToken') or ''
+            self.record(token, 'physical-accepted', run, manifest.get('combination'))
             return self.event(run, 'physical-accepted', False, physicalInputConfirmed=True,
                               acceptanceSource='explicit-user-action', setterCalled=False)
 

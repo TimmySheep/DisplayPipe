@@ -22,22 +22,28 @@ import Foundation
   check(restored.canAcceptPhysical && restored.detail.contains("实体") && !restored.physicalAccepted, "CG recovery must not imply physical acceptance")
   check(RecoveryPresentation(["state": "physical-accepted", "physicalInputConfirmed": true]).physicalAccepted, "physical acceptance requires an explicit record")
 
-  // Both cable orders are recoverable; only the label differs.
+  // Both cable orders are recoverable and symmetric; only this machine's own run record differs.
   for order in ["DCPEXT1", "DCPEXT0"] {
-   let ready = RecoveryPresentation(["state": "ready", "summary": "外接端口 2 个 · 目标：PANEL A（端口 \(order)，双 Pipe）",
-                                     "analysis": ["orderVerified": false, "orderLabel": "本机尚未验证的接入顺序（实验性；写入依赖倒计时自动撤销）",
-                                                  "combinationDescription": "目标：PANEL A（端口 \(order)，双 Pipe）",
-                                                  "countdownSeconds": 20, "internalOnline": true,
-                                                  "target": ["name": "PANEL A", "port": order]]])
-   check(ready.canRecover && !ready.orderVerified && ready.targetPort == order, "order \(order) stays recoverable and reports its port")
-   check(ready.title.contains("未验证的接入顺序") && ready.detail.contains("尚未验证"), "order \(order) is labelled honestly as unverified in this machine's records")
-   check(ready.detail.contains("倒计时"), "order \(order) recovery still leans on the countdown safety net")
+   let firstUse = RecoveryPresentation(["state": "ready", "summary": "外接端口 2 个 · 目标：PANEL A（端口 \(order)，双 Pipe）",
+                                        "analysis": ["orderVerified": false, "orderLabel": "首次使用该组合",
+                                                     "combinationDescription": "目标：PANEL A（端口 \(order)，双 Pipe）",
+                                                     "countdownSeconds": 20, "internalOnline": true,
+                                                     "target": ["name": "PANEL A", "port": order]]])
+   check(firstUse.canRecover && !firstUse.orderVerified && firstUse.targetPort == order, "order \(order) stays recoverable and reports its port")
+   check(firstUse.title == "发现可恢复的连接故障" && firstUse.detail.contains("首次使用该组合"),
+         "order \(order) with no recorded success keeps the neutral first-use label")
+   check(!firstUse.title.contains("未验证") && !firstUse.detail.contains("未验证") && !firstUse.detail.contains("实验性"),
+         "order \(order) copy never calls an order unverified or experimental")
+   check(firstUse.detail.contains("倒计时"), "order \(order) recovery still leans on the countdown safety net")
   }
   let verified = RecoveryPresentation(["state": "ready", "analysis": ["orderVerified": true,
-                                                                    "orderLabel": "已在本机验证过的接入顺序",
+                                                                    "orderLabel": "接入顺序（本机已验证）",
                                                                     "countdownSeconds": 20, "internalOnline": true,
                                                                     "target": ["name": "PANEL B", "port": "DCPEXT1"]]])
-  check(verified.orderVerified && !verified.title.contains("未验证"), "a locally verified order is not labelled experimental")
+  check(verified.orderVerified && verified.title == "发现可恢复的连接故障"
+        && verified.detail.contains("接入顺序（本机已验证）"), "a completed run shows the plain calm verified label")
+  check(!verified.detail.contains("首次使用该组合") && !verified.detail.contains("实验性") && !verified.detail.contains("未验证"),
+        "an already verified order carries no first-use, unverified or experimental wording")
   let refused = RecoveryPresentation(["state": "refused", "error": "对端外屏不属于当前支持的 EDID 类别（未识别能力：CTA vendor 0x0102）：拒绝写入。"])
   check(!refused.canRecover && refused.title.contains("拒绝写入") && refused.detail.contains("CTA vendor"), "a refusal names the failing gate and blocks recovery")
   let unsupported = RecoveryPresentation(["state": "unsupported", "error": "未找到另一台外接显示器缺失/无 Pipe 的证据"])

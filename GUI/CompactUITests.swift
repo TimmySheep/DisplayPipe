@@ -60,12 +60,19 @@ import AppKit
         check(texts().joined().contains("已自动撤销临时覆盖") && button("恢复双屏").isEnabled && button("撤销本次覆盖").isHidden, "an automatic revert is reported as a finished no-override state")
 
         delegate.presentRecovery(["state": "ready", "summary": "外接端口 2 个 · 目标：PANEL A（端口 DCPEXT1，双 Pipe）；缺失/无 Pipe 的对端端口：DCPEXT0",
-                                  "analysis": ["orderVerified": false, "orderLabel": "本机尚未验证的接入顺序（实验性；写入依赖倒计时自动撤销）",
+                                  "analysis": ["orderVerified": false, "orderLabel": "首次使用该组合",
                                                "combinationDescription": "目标：PANEL A（端口 DCPEXT1，双 Pipe）",
                                                "countdownSeconds": 20, "internalOnline": false, "requiresNoInternalFallback": true,
                                                "target": ["name": "PANEL A", "port": "DCPEXT1"]]])
-        check(texts().joined().contains("PANEL A") && texts().joined().contains("尚未验证的接入顺序"), "an unverified cable order is labelled in the UI without blocking recovery")
-        check(button("恢复双屏").isEnabled, "an unverified cable order stays recoverable with the normal confirmation")
+        check(texts().joined().contains("PANEL A") && texts().joined().contains("首次使用该组合"), "a first-use cable order carries the neutral label without blocking recovery")
+        check(button("恢复双屏").isEnabled, "a first-use cable order stays recoverable with the normal confirmation")
+        check(!texts().joined().contains("未验证") && !texts().joined().contains("实验性"), "no unverified or experimental wording reaches the interface")
+        delegate.presentRecovery(["state": "ready", "summary": "外接端口 2 个 · 目标：PANEL B（端口 DCPEXT1，双 Pipe）",
+                                  "analysis": ["orderVerified": true, "orderLabel": "接入顺序（本机已验证）",
+                                               "countdownSeconds": 20, "internalOnline": true,
+                                               "target": ["name": "PANEL B", "port": "DCPEXT1"]]])
+        check(texts().joined().contains("接入顺序（本机已验证）"), "a recorded verified order shows the plain calm label")
+        check(!texts().joined().contains("首次使用该组合"), "a recorded verified order is not labelled as a first use")
         delegate.presentRecovery(["state": "refused", "error": "占用双 Pipe 的目标 EDID 当前不可读（missing-data）：拒绝写入。"])
         check(!button("恢复双屏").isEnabled && texts().joined().contains("不可读"), "a refusal names the failing gate instead of pretending support")
         delegate.presentRecovery(["state": "recovery-needed", "error": "目标身份变化，已停止写入。"])
@@ -83,6 +90,6 @@ import AppKit
         check(!all(content).compactMap { $0 as? NSTextField }.contains { $0.textColor == .systemOrange }, "no orange text in constructed interface")
         check(!texts().joined().contains("P275") && !texts().joined().contains("华为") && !texts().joined().contains("QSN"), "no hardcoded monitor names anywhere in the interface")
         print("UI_INTROSPECTION", String(data: try JSONSerialization.data(withJSONObject: ["contentWidth": size().width, "contentHeight": size().height, "visibleButtons": buttons().filter(visible).map(\.title), "visibleLabels": texts(), "testOnly": true], options: [.sortedKeys]), encoding: .utf8)!)
-        print("PASS: 26 AppKit hierarchy checks (not screenshot or live GUI interaction acceptance)")
+        print("PASS: 32 AppKit hierarchy checks (not screenshot or live GUI interaction acceptance)")
     }
 }
