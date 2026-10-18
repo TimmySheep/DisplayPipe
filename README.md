@@ -167,7 +167,7 @@ The RSS readings used the same `ps rss` method at 15/16/17 seconds after separat
 
 Upstream: [pipecap](https://github.com/a1678991/pipecap), pinned source `d045192de888188783b4da74b10ab05f4229c868`. Third-party MIT notices are retained in their source directories and packaged resources. This repository does not contain BetterDisplay's implementation or bypass its licensing.
 
-**License status:** public source availability is not a blanket license grant. No project-wide license has yet been selected for the original DisplayPipe code; rights remain reserved for that code. The separately identified upstream MIT components remain under their included licenses.
+**License:** DisplayPipe's original code is released under the **MIT License** — see [`LICENSE`](LICENSE), Copyright (c) 2026 TimmySheep. Vendored upstream components keep their own included MIT notices, retained both in the source tree and in packaged builds. Apple private interfaces and third-party trademarks are not licensed by this project.
 
 This public repository starts from a reviewed source snapshot. Private development history, personal workspace instructions, raw local EDID captures, transaction backups, and machine-specific audit logs are intentionally not published.
 
