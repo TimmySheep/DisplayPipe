@@ -12,9 +12,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     typealias Runner = ([String], @escaping ([String: Any]) -> Void) throws -> [String: Any]
     private let collect: Collector
     private let run: Runner
+    static let noFallbackPreferenceKey = "DisplayPipe.allowWritesWithoutInternalFallback"
+    private let preferences: UserDefaults
+    private var allowWritesWithoutInternalFallback: Bool
     init(collect: @escaping Collector = Diagnostics.collect,
-         run: @escaping Runner = { try RecoveryClient.run($0, progress: $1) }) {
-        self.collect = collect; self.run = run; super.init()
+         run: @escaping Runner = { try RecoveryClient.run($0, progress: $1) },
+         preferences: UserDefaults = .standard) {
+        self.collect = collect; self.run = run; self.preferences = preferences
+        allowWritesWithoutInternalFallback = preferences.bool(forKey: Self.noFallbackPreferenceKey)
+        super.init()
     }
     private(set) var window: NSWindow!
     private var root: NSStackView!
@@ -161,10 +167,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             sections.addArrangedSubview(languageRow)
             planButton = NSButton(title: L10n.text("Check Plan (No Writes)"), target: self, action: #selector(plan))
             acceptButton = NSButton(title: L10n.text("Confirm Physical Displays & OSD"), target: self, action: #selector(acceptPhysical))
-            // Advanced, per-run opt-in: never pre-ticked, never persisted, never needed while the
-            // internal display is online. Selecting it acknowledges the countdown-revert limits.
-            noFallbackCheckbox = NSButton(checkboxWithTitle: L10n.text("Allow writes without internal fallback (this session only; not saved)"), target: self, action: nil)
-            noFallbackCheckbox!.state = .off
+            // Advanced opt-in: default off, remembered until disabled. It does not authorize
+            // startup writes or replace action-time identity, backup and confirmation checks.
+            noFallbackCheckbox = NSButton(checkboxWithTitle: L10n.text("Allow writes without internal fallback (remembered)"), target: self, action: #selector(noFallbackChanged))
+            noFallbackCheckbox!.state = allowWritesWithoutInternalFallback ? .on : .off
             noFallbackCheckbox!.toolTip = L10n.text(fallbackRiskKey)
             noFallbackCheckbox!.cell?.wraps = true
             fallbackHeading = label(L10n.text("No-Internal-Fallback Authorization"), size: 12, weight: .medium)
@@ -190,6 +196,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         detailsButton.image = NSImage(systemSymbolName: detailsScroll == nil ? "chevron.right" : "chevron.down", accessibilityDescription: nil)
         resizeForRows()
     }
+    /// Save only this opt-in, never a target identity, EDID or transaction authorization.
+    @objc private func noFallbackChanged() {
+        allowWritesWithoutInternalFallback = noFallbackCheckbox?.state == .on
+        preferences.set(allowWritesWithoutInternalFallback, forKey: Self.noFallbackPreferenceKey)
+    }
     private func updateLanguageSelector() {
         guard let selector = languageSelector else { return }
         selector.removeAllItems()
@@ -207,7 +218,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         undoButton.title = L10n.text("Undo This Override"); detailsButton.title = L10n.text("Details")
         guideButton?.title = L10n.text("User Guide"); recordsButton?.title = L10n.text("Open Records")
         planButton?.title = L10n.text("Check Plan (No Writes)"); acceptButton?.title = L10n.text("Confirm Physical Displays & OSD")
-        noFallbackCheckbox?.title = L10n.text("Allow writes without internal fallback (this session only; not saved)")
+        noFallbackCheckbox?.title = L10n.text("Allow writes without internal fallback (remembered)")
         noFallbackCheckbox?.toolTip = L10n.text(fallbackRiskKey)
         fallbackHeading?.stringValue = L10n.text("No-Internal-Fallback Authorization")
         fallbackRiskLabel?.stringValue = L10n.text(fallbackRiskKey)
@@ -277,16 +288,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if !recoveryState.orderLabel.isEmpty { parts.append(L10n.text("Connection order: ") + recoveryState.orderLabel) }
         return parts.joined(separator: "\n\n")
     }
-    @objc private func recover() {
-        guard !refreshing && !operationActive else { return }
+    /// Build a command only for an explicit Recover action; the backend still preflights afresh.
+    func recoveryCommand() -> [String]? {
         var command = ["recover", "--execute", "--confirm-private-api-risk"]
         if recoveryState.requiresNoInternalFallback {
-            guard noFallbackCheckbox?.state == .on else {
-                let alert = NSAlert(); alert.messageText = L10n.text("Additional Authorization Required"); alert.alertStyle = .warning
-                alert.informativeText = L10n.text("Read the technical risks in Details and explicitly authorize this session. No display write occurred.")
-                alert.addButton(withTitle: L10n.text("OK")); alert.runModal(); return
-            }
+            guard allowWritesWithoutInternalFallback else { return nil }
             command.append("--ack-no-internal-fallback")
+        }
+        return command
+    }
+    @objc private func recover() {
+        guard !refreshing && !operationActive else { return }
+        guard let command = recoveryCommand() else {
+            let alert = NSAlert(); alert.messageText = L10n.text("Additional Authorization Required"); alert.alertStyle = .warning
+            alert.informativeText = L10n.text("Read the technical risks in Details and enable the remembered permission. No display write occurred.")
+            alert.addButton(withTitle: L10n.text("OK")); alert.runModal(); return
         }
         guard confirm(L10n.text("Recover Displays?"), recoverConfirmation(), action: L10n.text("Confirm and Recover")) else { return }
         perform(command)

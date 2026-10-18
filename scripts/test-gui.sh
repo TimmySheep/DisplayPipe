@@ -13,3 +13,7 @@ xcrun swiftc -D UI_TESTING -swift-version 5 -framework AppKit -framework CoreGra
 
 xcrun swiftc -D UI_TESTING -swift-version 5 -framework AppKit -framework CoreGraphics GUI/Localization.swift GUI/DiagnosticCore.swift GUI/Presentation.swift GUI/Diagnostics.swift GUI/RecoveryPresentation.swift GUI/RecoveryClient.swift GUI/App.swift GUI/LocalizationTests.swift -o .build/localization-tests
 .build/localization-tests
+
+# Isolated UserDefaults suites; fail-only collector/backend, never the user’s app preferences.
+xcrun swiftc -D UI_TESTING -swift-version 5 -framework AppKit -framework CoreGraphics GUI/Localization.swift GUI/DiagnosticCore.swift GUI/Presentation.swift GUI/Diagnostics.swift GUI/RecoveryPresentation.swift GUI/RecoveryClient.swift GUI/App.swift GUI/PreferenceTests.swift -o .build/preference-tests
+.build/preference-tests

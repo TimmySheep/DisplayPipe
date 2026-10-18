@@ -1,6 +1,7 @@
 import Foundation
 
-/// Only this preference is persisted. Backend protocol, monitor names, IDs and paths are opaque.
+/// The language preference is separate from the app’s remembered no-fallback opt-in.
+/// Backend protocol, monitor names, IDs and paths are opaque.
 enum LanguageChoice: String, CaseIterable { case system, english, simplifiedChinese }
 enum L10n {
     static let preferenceKey = "DisplayPipe.uiLanguage"
@@ -34,7 +35,7 @@ enum L10n {
         "(no candidate paths)": "（无可尝试的路径）",
         "Action required · Pending override": "需要处理 · 有未结束覆盖",
         "Additional Authorization Required": "需要额外授权",
-        "Allow writes without internal fallback (this session only; not saved)": "允许无内屏回退写入（合盖；仅本次，不保存）",
+        "Allow writes without internal fallback (remembered)": "允许无内屏回退写入（记住此选择）",
         "Ambiguous identity; name unconfirmed": "同样身份的设备多于一台，无法确认名称",
         "Application resources are missing": "应用资源路径缺失",
         "Applying temporary candidate…": "正在应用临时候选…",
@@ -96,7 +97,7 @@ enum L10n {
         "Provide Python 3.9+ (for example /usr/bin/python3 from Xcode/command line tools, or an existing interpreter via DISPLAYPIPE_PYTHON). ": "请安装或提供 Python 3.9+（例如 Xcode/命令行工具自带 /usr/bin/python3，或用 DISPLAYPIPE_PYTHON 指定已有解释器）。",
         "Quit DisplayPipe": "退出 DisplayPipe",
         "Raw technical diagnostics (original language)": "原始技术诊断（保留原文）",
-        "Read the technical risks in Details and explicitly authorize this session. No display write occurred.": "请在详细信息中阅读技术风险，并主动选择本次授权。未写入显示。",
+        "Read the technical risks in Details and enable the remembered permission. No display write occurred.": "请在详细信息中阅读技术风险，并主动开启记住的许可。未写入显示。",
         "Recover Displays": "恢复双屏",
         "Recover Displays?": "恢复双屏？",
         "Recoverable connection fault detected": "发现可恢复的连接故障",

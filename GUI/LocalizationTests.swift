@@ -3,6 +3,8 @@ import AppKit
 final class MemoryPreferences: UserDefaults {
     var values: [String: Any] = [:]
     override func string(forKey key: String) -> String? { values[key] as? String }
+    override func bool(forKey key: String) -> Bool { values[key] as? Bool ?? false }
+    override func set(_ value: Bool, forKey key: String) { values[key] = value }
     override func set(_ value: Any?, forKey key: String) { values[key] = value }
 }
 @main struct LocalizationTests {
@@ -31,7 +33,7 @@ final class MemoryPreferences: UserDefaults {
             func tokens(_ text: String) -> [String] { pattern.matches(in: text, range: NSRange(text.startIndex..., in: text)).map { (text as NSString).substring(with: $0.range) }.sorted() }
             check(tokens(english) == tokens(chinese), "catalog interpolation parity: \(english)")
         }
-        let delegate = AppDelegate(collect: { _ in fatalError("language switching must not collect") }, run: { _, _ in fatalError("language switching must not run any backend command or setter") })
+        let delegate = AppDelegate(collect: { _ in fatalError("language switching must not collect") }, run: { _, _ in fatalError("language switching must not run any backend command or setter") }, preferences: prefs)
         delegate.buildWindow()
         func all(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(all) }
         func visible(_ view: NSView) -> Bool { !view.isHidden && (view.superview.map(visible) ?? true) }
@@ -64,15 +66,16 @@ final class MemoryPreferences: UserDefaults {
             let detailTitle = L10n.text("Details")
             buttons().first { $0.title == detailTitle }!.performClick(nil)
             check(texts().contains(unsafe) && texts().contains(L10n.text("Raw technical diagnostics (original language)")), "Details labels full raw untranslated diagnostics honestly")
-            let checkbox = buttons().first { $0.title == L10n.text("Allow writes without internal fallback (this session only; not saved)") }!
+            let checkbox = buttons().first { $0.title == L10n.text("Allow writes without internal fallback (remembered)") }!
             check(checkbox.state == .off, "no-fallback remains default-off")
-            checkbox.state = .on
+            checkbox.performClick(nil)
             let selector = all(delegate.window.contentView!).compactMap { $0 as? NSPopUpButton }.first!
             check(selector.numberOfItems == 3, "Details offers System/English/简体中文")
             selector.selectItem(at: LanguageChoice.allCases.firstIndex(of: choice == .english ? .simplifiedChinese : .english)!)
             NSApp.sendAction(selector.action!, to: selector.target, from: selector)
             check(buttons().contains { $0.title == L10n.text("Refresh") }, "native selector immediately relocalizes controls")
-            check(checkbox.state == .on, "language change neither grants nor clears existing explicit session consent")
+            check(checkbox.state == .on, "language change preserves remembered permission")
+            checkbox.performClick(nil)
             buttons().first { $0.title == L10n.text("Details") }!.performClick(nil)
             check(!texts().contains(unsafe), "collapsing Details keeps diagnostic off home")
         }
@@ -85,7 +88,7 @@ final class MemoryPreferences: UserDefaults {
             }
         }
         delegate.selectLanguage(.english)
-        check(Set(prefs.values.keys) == [L10n.preferenceKey], "only language preference is persisted")
+        check(Set(prefs.values.keys) == [L10n.preferenceKey, AppDelegate.noFallbackPreferenceKey], "only language and explicit opt-in preferences are persisted")
         check(L10n.text("Refresh") == "Refresh", "switching immediately updates English UI")
         check(L10n.catalog.values.allSatisfy { !$0.isEmpty } && L10n.catalog.count > 40, "central bilingual catalog has nonempty translations")
         print("PASS: \(count) localization checks; no collector, backend or setter executed")

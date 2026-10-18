@@ -5,7 +5,7 @@ import AppKit
         L10n.preferences = TestLanguagePreferences()
 
         _ = NSApplication.shared
-        let delegate = AppDelegate(collect: { _ in fatalError("layout tests must not collect live displays") })
+        let delegate = AppDelegate(collect: { _ in fatalError("layout tests must not collect live displays") }, run: { _, _ in fatalError("layout must not run backend/setter") }, preferences: L10n.preferences)
         delegate.buildWindow()
         let window = delegate.window!
         let content = window.contentView!
@@ -50,8 +50,8 @@ import AppKit
         check(size().height == 680 && texts().joined().contains("EDID") && buttons().contains { $0.title == "打开记录" }, "details disclosure creates scrollable diagnostics and records/help")
         check(button("确认实体双屏与 OSD").isHidden, "physical acceptance is hidden when not applicable")
         let optIn = buttons().first { $0.title.contains("允许无内屏回退写入") }
-        check(optIn != nil && optIn!.state == .off, "the no-internal-fallback opt-in exists and is never pre-ticked")
-        check(optIn!.title.contains("不保存"), "the opt-in says it is not persisted")
+        check(optIn != nil && optIn!.state == .off, "the no-internal-fallback opt-in defaults off without a saved choice")
+        check(optIn!.title.contains("记住此选择"), "the opt-in plainly says the choice is remembered")
         button("详细信息").performClick(nil)
         check(size().height == 420 && !all(content).contains { $0 is NSScrollView }, "collapsing details releases views and restores compact geometry")
 
@@ -97,5 +97,6 @@ import AppKit
 }
 
 private final class TestLanguagePreferences: UserDefaults {
+    override func bool(forKey key: String) -> Bool { false }
     override func string(forKey key: String) -> String? { key == L10n.preferenceKey ? LanguageChoice.simplifiedChinese.rawValue : nil }
 }

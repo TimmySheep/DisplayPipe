@@ -34,7 +34,7 @@ run(ROOT/'.build/icon-generator',icons)
 raw_icon=ROOT/'.build'/('DisplayPipe-uncompressed-'+uuid.uuid4().hex+'.icns')
 run('/usr/bin/iconutil','-c','icns','-o',raw_icon,icons)
 run(python,'-B',ROOT/'scripts/optimize-icon.py',raw_icon,resources/'DisplayPipe.icns')
-info=dict(CFBundleExecutable='DisplayPipe',CFBundleIdentifier='local.displaypipe.diagnostics',CFBundleName='DisplayPipe',CFBundleDisplayName='DisplayPipe',CFBundlePackageType='APPL',CFBundleShortVersionString='0.2.3',CFBundleVersion='5',CFBundleIconFile='DisplayPipe.icns',NSHighResolutionCapable=True,LSMinimumSystemVersion='13.0')
+info=dict(CFBundleExecutable='DisplayPipe',CFBundleIdentifier='local.displaypipe.diagnostics',CFBundleName='DisplayPipe',CFBundleDisplayName='DisplayPipe',CFBundlePackageType='APPL',CFBundleShortVersionString='0.2.4',CFBundleVersion='6',CFBundleIconFile='DisplayPipe.icns',NSHighResolutionCapable=True,LSMinimumSystemVersion='13.0')
 write(app/'Contents/Info.plist',plistlib.dumps(info))
 for native in [helpers/'EDIDProbe',helpers/'DisplayProbe',resources/'backend/build/DisplayPipeIO',resources/'backend/edid-core/target/release/displaypipe-edid']:
  run('/usr/bin/codesign','--force','--sign','-',native)

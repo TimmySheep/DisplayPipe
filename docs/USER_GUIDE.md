@@ -1,10 +1,10 @@
-# DisplayPipe 0.2.3 · User Guide
+# DisplayPipe 0.2.4 · User Guide
 
 ## Language and the compact home view
 
 Open the app, review the external display names/status, and use **Recover Displays** only when recovery is needed. An already-healthy state is a no-write no-op. **Refresh** / Command-R is manual; there is no polling loop or added runtime/framework.
 
-The native UI defaults to the first preferred system language: Chinese (`zh`, `zh-Hans`, or any `zh-*` variant) uses **Simplified Chinese**; other/unknown languages fall back to **English**. Open **Details → Language** to choose **System / English / 简体中文**. The language choice alone is saved. Switching immediately redraws cached state, labels, actions and controls; it does not collect new display data or run any recovery/undo command. Names, IDs, ports and paths stay unchanged.
+The native UI defaults to the first preferred system language: Chinese (`zh`, `zh-Hans`, or any `zh-*` variant) uses **Simplified Chinese**; other/unknown languages fall back to **English**. Open **Details → Language** to choose **System / English / 简体中文**. The language choice is saved separately from the explicit no-internal-fallback opt-in. Switching immediately redraws cached state, labels, actions and controls; it does not collect new display data or run any recovery/undo command. Names, IDs, ports and paths stay unchanged.
 
 Home shows external display rows/counts and concise state/action messages only. Internal-display and lid context appears **only in Details**. A refusal, failure or pending override directs you to Details for the full reason instead of leaking technical paragraphs onto Home. **Undo This Override** remains visible when a pending transaction requires it.
 
@@ -14,19 +14,19 @@ Native buttons, menu items, confirmations, countdowns, display states and depend
 
 Recovery uses the existing guarded backend: fresh exact-identity backup, audited conservative candidate, at most 20 seconds of stability observations, then verified original-byte reset. Without stable evidence, the countdown attempts verified automatic undo; changed identity, missing service or uncertain readback retains a pending transaction rather than retargeting a display. Do not unplug or quit during a transaction. Check the actual image and OSD yourself; system readings are not physical confirmation.
 
-**Details → No-Internal-Fallback Authorization** explains the internal display/lid risks. Its explicit permission remains **default-off, session-only and not saved**; changing language neither grants permission nor changes the backend gate. Collapse/reopen Details resets this checkbox to off as before. Only the independent language preference persists. The action confirmation still acknowledges private API risk, possible flicker/failure, the deadline and pending-transaction handling.
+**Details → No-Internal-Fallback Authorization** explains the existing internal display/lid risks. **Allow writes without internal fallback (remembered)** is **default-off on a fresh install**. Checking or unchecking saves true or false until you change it, including across app restarts. Language changes, refresh and collapsing/reopening Details preserve the choice. Loading or toggling it neither collects displays nor calls the backend/setter. Only this opt-in is saved, never a service ID, old EDID or pending transaction as authorization. It does not trigger recovery on startup/status: every explicit Recover action still requires confirmation, current-identity preflight and a fresh backup. The 20-second countdown and backend gates are unchanged. The action confirmation still acknowledges private API risk, possible flicker/failure, the deadline and pending-transaction handling.
 
-Python 3.9+ must already exist. Missing-runtime errors are localized and list attempted paths; no runtime is installed and no display is written. Runtime reports/backups stay in `~/Library/Application Support/DisplayPipe/`. Removing the app is not undo. Builds are ad-hoc signed, not Developer ID signed or notarized. This bilingual UI update does not expand hardware support or establish new real-fault recovery acceptance.
+Python 3.9+ must already exist. Missing-runtime errors are localized and list attempted paths; no runtime is installed and no display is written. Runtime reports/backups stay in `~/Library/Application Support/DisplayPipe/`. Removing the app is not undo. Builds are ad-hoc signed, not Developer ID signed or notarized. This preference-only update does not expand hardware support or establish new real-fault recovery acceptance.
 
 ---
 
-# 中文使用说明 · DisplayPipe 0.2.3
+# 中文使用说明 · DisplayPipe 0.2.4
 
 ## 语言与首页
 
-界面默认跟随系统首选语言：`zh`／`zh-Hans`／其它 `zh-*` 变体均使用简体中文，其它或未知语言回退英文。在 **详细信息 → 语言** 选择 **跟随系统／English／简体中文**。只持久保存语言选择，切换即时重绘缓存数据，不重新采集、不执行恢复或撤销；设备名称、标识、端口与路径保持原文。
+界面默认跟随系统首选语言：`zh`／`zh-Hans`／其它 `zh-*` 变体均使用简体中文，其它或未知语言回退英文。在 **详细信息 → 语言** 选择 **跟随系统／English／简体中文**。语言选择与主动选择的无内屏回退许可分别持久保存，切换即时重绘缓存数据，不重新采集、不执行恢复或撤销；设备名称、标识、端口与路径保持原文。
 
-首页仅保留外接屏行、台数和结构化的简洁状态／操作提示，内屏与机盖文字全部位于详细信息。拒绝、失败与未结束覆盖会提示查看详细信息，完整原因保留在 **原始技术诊断（保留原文）**，此区明确可能仍为后端原始中英文，不声称所有诊断都已翻译。无内屏回退许可仍在详细信息内默认不勾选、仅本次、不保存；切换语言不改变勾选状态，收起后重开仍回到默认关闭。后端协议、身份校验、倒计时与其它安全门槛均未改变。
+首页仅保留外接屏行、台数和结构化的简洁状态／操作提示，内屏与机盖文字全部位于详细信息。拒绝、失败与未结束覆盖会提示查看详细信息，完整原因保留在 **原始技术诊断（保留原文）**，此区明确可能仍为后端原始中英文，不声称所有诊断都已翻译。**允许无内屏回退写入（记住此选择）** 只在详细信息中显示，新安装默认不勾选；勾选或取消会保存开／关，直至再次改变，重启、刷新、切换语言和收起重开详情均保留。加载／切换此项不采集显示器、不调用后端或 setter；只保存许可布尔值，不保存服务 ID、旧 EDID 或 pending 事务作为授权。不会在启动／状态查询时自动恢复，每次仍需主动点击并确认，重新核对当前身份、新建备份。后端协议、20秒倒计时与其它安全门槛均未改变，不扩大既有实测范围。
 
 ## 日常使用（不需要终端）
 
@@ -101,7 +101,7 @@ Python 3.9+ must already exist. Missing-runtime errors are localized and list at
 
 正式源码：`~/src/DisplayPipe`。`scripts/build-gui.sh`执行Rust/Python/Swift测试、构建、生成并无损压缩本地图标、签名和打包后只读测试，不启动/退出GUI事件循环。`scripts/test-gui.sh`包括实际AppKit视图层级的紧凑尺寸、默认隐藏诊断、pending撤销和安全禁用测试；它不代表真实窗口的截图/交互验收。`scripts/test-icon.py`通过AppKit独立解码验证无损压缩前后所有图标尺寸逐像素相同。`scripts/test-package.py`检查精确运行资源清单和哈希，并测试真实复制后的包、图标、签名、解释器和健康无写入路径；实际健康主按钮契约使用**禁止真实setter的注入**核验，不能意外改显示。
 
-包内`--smoke-json`只读诊断；`--recovery-smoke-json`通过与GUI相同的客户端执行默认dry-run（健康与故障状态都只做只读计划，`setterCalled=false`）。恢复CLI为`Resources/backend/recovery.py`：默认`status`；`recover`默认dry-run，显示写入必须同时传`--execute --confirm-private-api-risk`；内屏不在线时还必须显式传 `--ack-no-internal-fallback`（GUI 在“详细信息”里用同一语义的复选框表达，不保存、不预勾选）。`status` 永远输出可 JSON 序列化的结果（`already-healthy`/`ready`/`refused`/`unsupported`）。普通用户不需要终端命令。构建/测试脚本只保留在正式源码；重新构建需正式源目录、已有Xcode和Rust工具链。
+包内`--smoke-json`只读诊断；`--recovery-smoke-json`通过与GUI相同的客户端执行默认dry-run（健康与故障状态都只做只读计划，`setterCalled=false`）。恢复CLI为`Resources/backend/recovery.py`：默认`status`；`recover`默认dry-run，显示写入必须同时传`--execute --confirm-private-api-risk`；内屏不在线时还必须显式传 `--ack-no-internal-fallback`（GUI 在“详细信息”里用“允许无内屏回退写入（记住此选择）”表达，新安装默认关闭，仅保存用户选择的布尔值；后端本身不读取此偏好，只在显式恢复时接收该参数）。`status` 永远输出可 JSON 序列化的结果（`already-healthy`/`ready`/`refused`/`unsupported`）。普通用户不需要终端命令。构建/测试脚本只保留在正式源码；重新构建需正式源目录、已有Xcode和Rust工具链。
 
 只读联调（不写显示、不改用户状态）：`python3 scripts/check-live-readiness.py -v` 会枚举当前真实显示器、打印分类与目标/对端，能生成候选时打印候选的 SHA、被移除与保留的时序，并用**禁止调用 setter** 的方式跑一次 dry-run。在真机故障现场用它确认“会走恢复路径”而不是“会被拒绝”。
 

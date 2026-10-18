@@ -7,7 +7,7 @@ class Package(unittest.TestCase):
  def test_release_version_and_original_mit_license(self):
   import plistlib
   info=plistlib.loads((APP/'Contents/Info.plist').read_bytes())
-  self.assertEqual((info['CFBundleShortVersionString'],info['CFBundleVersion']),('0.2.3','5'))
+  self.assertEqual((info['CFBundleShortVersionString'],info['CFBundleVersion']),('0.2.4','6'))
  def test_original_mit_license(self):
   self.assertTrue((APP/'Contents/Resources/licenses/DisplayPipe-MIT.txt').is_file(),'original MIT license must ship with upstream notices')
   self.assertEqual((APP/'Contents/Resources/licenses/DisplayPipe-MIT.txt').read_bytes(),(ROOT/'LICENSE').read_bytes())
